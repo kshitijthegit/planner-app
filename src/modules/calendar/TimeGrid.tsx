@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { addDays, addMinutes, fmtTime, minutesOfDay, sameDay, startOfDay } from '../../lib/date';
-import { attClass, isWholeDay, itemsOnDay, layoutLanes, onDark, textOn, topRowOrder, type Item } from '../../lib/items';
+import { attClass, isWholeDay, itemsOnDay, layoutLanes, onDark, stagger, textOn, topRowOrder, type Item } from '../../lib/items';
 import { useStore } from '../../store';
 
 const DAY_MIN = 24 * 60;
 const SNAP = 15; // minutes
-const TOP_ROW_MAX = 3; // visible items per day in the top-of-day row
+const TOP_ROW_MAX = 3; // visible items per day in the top-of-day row (week view)
+const TOP_ROW_MAX_DAY = 10; // day view has room for more
+const STAGGER_PX = 16; // indent per subtask level in day view
 
 interface Props {
   days: Date[];
@@ -28,18 +30,18 @@ function minutesFromEvent(e: React.MouseEvent | React.DragEvent): number {
 const pct = (min: number) => `${(min / DAY_MIN) * 100}%`;
 
 /** Pill used in the top-of-day row: event = filled, goal = outline, task = thin with a check. */
-export function TopPill({ item }: { item: Item }) {
+export function TopPill({ item, indent = 0 }: { item: Item; indent?: number }) {
   const { openEditor, areaColor, areaIdOf, completeTask, reopenTask, saveGoal } = useStore();
   const color = areaColor(item.areaId ?? areaIdOf({ category_id: item.categoryId }));
   const open = () =>
     item.task ? openEditor({ type: 'task', task: item.task }) : item.goal ? openEditor({ type: 'goal', goal: item.goal }) : item.event && openEditor({ type: 'event', event: item.event });
   if (item.kind === 'task')
     return (
-      <span className={`pill-task${item.done ? ' done' : ''}`} style={{ borderColor: onDark(color), ['--c' as string]: color }}>
+      <span className={`pill-task${item.done ? ' done' : ''}${indent ? ' sub' : ''}`} style={{ borderColor: onDark(color), ['--c' as string]: color, marginLeft: indent * STAGGER_PX }}>
         <button className="mini-check" role="checkbox" aria-checked={item.done} aria-label={`Complete ${item.title}`} onClick={() => (item.done ? reopenTask(item.task!.id) : completeTask(item.task!.id))}>
           {item.done && <Icon name="check" size={10} stroke={3} />}
         </button>
-        <button className="pill-label" onClick={open}>{item.title}</button>
+        <button className="pill-label" onClick={open} title={item.title}>{item.title}</button>
       </span>
     );
   if (item.kind === 'goal')
@@ -70,7 +72,7 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
   const cols = `44px repeat(${days.length}, minmax(0, 1fr))`;
 
   return (
-    <div className={`tg${days.length > 1 ? " multi" : ""}`}>
+    <div className={`tg${days.length > 1 ? " multi" : " day"}`}>
       <div className={`tg-head${days.length === 1 ? ' single' : ''}`} style={{ gridTemplateColumns: cols }}>
         <span />
         {days.map((d) => (
@@ -85,6 +87,8 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
         <span className="tg-gutter-label">all day</span>
         {days.map((d) => {
           const top = itemsOnDay(items, d).filter((i) => i.allDay).sort(topRowOrder);
+          const max = days.length === 1 ? TOP_ROW_MAX_DAY : TOP_ROW_MAX;
+          const sameDayAll = itemsOnDay(items, d);
           return (
             <div
               key={d.toISOString()}
@@ -92,9 +96,9 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
               onClick={(e) => e.target === e.currentTarget && onCreateGoal(d)}
               title="Click empty space to add a goal"
             >
-              {top.slice(0, TOP_ROW_MAX).map((i) => <TopPill key={i.key} item={i} />)}
-              {top.length > TOP_ROW_MAX && (
-                <button className="more-link" onClick={() => onShowDay(d)}>+{top.length - TOP_ROW_MAX} more</button>
+              {top.slice(0, max).map((i) => <TopPill key={i.key} item={i} indent={days.length === 1 ? stagger(i, sameDayAll) : 0} />)}
+              {top.length > max && (
+                <button className="more-link" onClick={() => onShowDay(d)}>+{top.length - max} more</button>
               )}
             </div>
           );
@@ -110,7 +114,8 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
         {days.map((day, di) => {
           const dayStart = startOfDay(day);
           const dayEnd = addDays(dayStart, 1);
-          const placed = layoutLanes(itemsOnDay(items, day).filter((i) => !i.allDay));
+          const dayItems = itemsOnDay(items, day);
+          const placed = layoutLanes(dayItems.filter((i) => !i.allDay));
           return (
             <div
               key={day.toISOString()}
@@ -143,11 +148,13 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
                 const laneW = `${100 / lanes}%`;
                 if (item.kind === 'task') {
                   const t = item.task!;
+                  const shift = days.length === 1 ? stagger(item, dayItems) * STAGGER_PX : 0;
                   return (
                     <div
                       key={item.key}
-                      className={`tg-task${item.done ? ' done' : ''}`}
-                      style={{ top: pct(startMin), height: `max(${pct(durMin)}, 18px)`, left, width: `calc(${laneW} * 0.62 - 2px)`, borderColor: onDark(color), ['--c' as string]: color }}
+                      className={`tg-task${item.done ? ' done' : ''}${shift ? ' sub' : ''}`}
+                      title={item.title}
+                      style={{ top: pct(startMin), height: `max(${pct(durMin)}, 18px)`, left: `calc(${(lane / lanes) * 100}% + ${2 + shift}px)`, width: `calc(${laneW} * ${days.length === 1 ? 0.8 : 0.62} - ${2 + shift}px)`, borderColor: onDark(color), ['--c' as string]: color }}
                       draggable
                       onDragStart={(ev) => {
                         ev.dataTransfer.setData('text/plain', `task:${t.id}`);

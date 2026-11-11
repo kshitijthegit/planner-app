@@ -624,3 +624,9 @@ body, .rail, .bottom-nav, .card, .modal, .tray-sheet { transition: background-co
 .theme-light .tg-block, .theme-light .pill-event { box-shadow: inset 0 0 0 1px #0e2a1f22; }
 
 .picker-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Subtasks staggered under their main task (day view) */
+.pill-task.sub, .tg-task.sub { border-style: dashed; border-left-style: solid; }
+.tg-top-cell .pill-task.sub { position: relative; }
+.tg-top-cell .pill-task.sub::before { content: ''; position: absolute; left: -10px; top: -4px; width: 7px; height: 13px; border-left: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); border-bottom-left-radius: 4px; }
+.tg-top-cell { overflow-y: auto; }
+.tg.day .tg-top-cell { max-height: 210px; }

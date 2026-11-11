@@ -11,6 +11,7 @@
 - The background follows the time of day (`src/lib/daytheme.ts` sets CSS variables hourly and adds `.theme-light` on light shades). Never hard-code text or surface colours; use the variables.
 - Events: attendance (yes/maybe/no → normal/dashed/faint) and recurrence, which is expanded server-side; an occurrence edits the whole series.
 - Undo: every store mutation pushes an inverse operation (`pushUndo`), triggered by Ctrl/⌘+Z or the toast button. POST accepts `id` so deleted rows can be restored.
+- Calendar subtasks: week and month views show main tasks only. Day view also shows subtasks, labelled "Sub-subtask → Subtask → Main" and indented under any parent due the same day (`buildItems({ topLevelOnly })`, `stagger()`).
 - Date and time entry uses `pickers.tsx` (DateField / TimeField / DateTimeField), never native date inputs.
 - GUI: Today page = home (Top 3, timeline, quick add, shutdown card). Calendar = day/week/month with a drag-to-time-block task tray.
 - Areas → Categories (2 levels) colour every task and event. Synced events get a category per source, overridable per series.

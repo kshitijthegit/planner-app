@@ -15,6 +15,8 @@ export interface Item {
   categoryId: string | null;
   areaId: string | null; // explicit area (category's area is resolved by the caller)
   done: boolean;
+  /** Tasks only: ids of parent and grandparent (nearest first). */
+  ancestors?: string[];
   event?: CalEvent;
   task?: Task;
   goal?: Goal;
@@ -71,11 +73,21 @@ export function goalToItem(g: Goal): Item {
   };
 }
 
-export function buildItems(events: CalEvent[], tasks: Task[], goals: Goal[] = []): Item[] {
+export function buildItems(events: CalEvent[], tasks: Task[], goals: Goal[] = [], opts: { topLevelOnly?: boolean } = {}): Item[] {
   const items = events.map(eventToItem);
+  const byId = new Map(tasks.map((t) => [t.id, t]));
   for (const t of tasks) {
+    if (opts.topLevelOnly && t.parent_id) continue;
     const it = taskToItem(t);
-    if (it) items.push(it);
+    if (!it) continue;
+    // Subtasks read "Subtask → Parent → Main task".
+    const ancestors: Task[] = [];
+    for (let p = t.parent_id ? byId.get(t.parent_id) : undefined; p && ancestors.length < 3; p = p.parent_id ? byId.get(p.parent_id) : undefined) ancestors.push(p);
+    if (ancestors.length) {
+      it.title = [t.title, ...ancestors.map((a) => a.title)].join(' → ');
+      it.ancestors = ancestors.map((a) => a.id);
+    }
+    items.push(it);
   }
   for (const g of goals) items.push(goalToItem(g));
   return items.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -90,10 +102,25 @@ export function itemsOnDay(items: Item[], day: Date): Item[] {
   );
 }
 
-/** Order for the top-of-day row: all-day events, then goals, then tasks. */
+/** Order for the top-of-day row: all-day events, then goals, then tasks (each main task followed by its subtasks). */
 export function topRowOrder(a: Item, b: Item): number {
   const rank = (i: Item) => (i.kind === 'goal' ? 1 : i.kind === 'task' ? 2 : 0);
-  return rank(a) - rank(b) || a.title.localeCompare(b.title);
+  if (rank(a) !== rank(b)) return rank(a) - rank(b);
+  if (a.kind === 'task' && b.kind === 'task') {
+    const root = (i: Item) => i.ancestors?.[i.ancestors.length - 1] ?? i.task!.id;
+    const path = (i: Item) => [...(i.ancestors ?? []).slice().reverse(), i.task!.id].join('/');
+    const rootTitle = (i: Item) => i.title.split(' → ').pop()!;
+    if (root(a) !== root(b)) return rootTitle(a).localeCompare(rootTitle(b)) || root(a).localeCompare(root(b));
+    return path(a).localeCompare(path(b)) || (a.ancestors?.length ?? 0) - (b.ancestors?.length ?? 0);
+  }
+  return a.title.localeCompare(b.title);
+}
+
+/** How many of this task's ancestors are also on the same day (used to stagger subtasks under their parent). */
+export function stagger(item: Item, sameDay: Item[]): number {
+  if (!item.ancestors?.length) return 0;
+  const ids = new Set(sameDay.filter((i) => i.task).map((i) => i.task!.id));
+  return item.ancestors.filter((a) => ids.has(a)).length;
 }
 
 /** A day is "blocked out" (white background) when an all-day event covers it. */

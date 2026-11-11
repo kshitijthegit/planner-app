@@ -41,8 +41,9 @@ export function CalendarView() {
 
   const { events } = useAgenda(from, to);
   const items = useMemo(
-    () => buildItems(events, tasks, goals).filter((i) => !hidden.has(i.areaId ?? areaIdOf({ category_id: i.categoryId }) ?? 'none')),
-    [events, tasks, goals, hidden, areaIdOf],
+    // Week and month show main tasks only; day view also shows subtasks (labelled with their parents).
+    () => buildItems(events, tasks, goals, { topLevelOnly: view !== 'day' }).filter((i) => !hidden.has(i.areaId ?? areaIdOf({ category_id: i.categoryId }) ?? 'none')),
+    [events, tasks, goals, hidden, areaIdOf, view],
   );
 
   function toggleCat(id: string) {
