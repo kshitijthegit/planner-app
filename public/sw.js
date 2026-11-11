@@ -1,5 +1,5 @@
 // Planner service worker: offline app shell + push notifications.
-const CACHE = 'planner-v1';
+const CACHE = 'planner-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])));

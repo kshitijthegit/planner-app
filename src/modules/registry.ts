@@ -3,6 +3,7 @@
 import type { ComponentType } from 'react';
 import { AreasView } from './areas/AreasView';
 import { CalendarView } from './calendar/CalendarView';
+import { CalendarsView } from './calendars/CalendarsView';
 import { SettingsView } from './settings/SettingsView';
 import { TasksView } from './tasks/TasksView';
 import { TodayView } from './today/TodayView';
@@ -15,14 +16,17 @@ export interface FrontendModule {
   icon: string;
   component: ComponentType | null;
   toggleable: boolean;
+  /** Routed page that is reached from another page instead of the main nav. */
+  hideInNav?: boolean;
 }
 
 export const MODULES: FrontendModule[] = [
-  { id: 'today', title: 'Today', description: 'Home: top 3, timeline, quick add', path: '/', icon: 'today', component: TodayView, toggleable: false },
+  { id: 'today', title: 'Today', description: 'Home: top 3, timeline, quick add', path: '/', icon: 'coffee', component: TodayView, toggleable: false },
   { id: 'calendar', title: 'Calendar', description: 'Day / week / month planner with drag-to-time-block', path: '/calendar', icon: 'calendar', component: CalendarView, toggleable: true },
   { id: 'tasks', title: 'Tasks', description: 'All tasks grouped by area and category', path: '/tasks', icon: 'tasks', component: TasksView, toggleable: true },
   { id: 'areas', title: 'Areas', description: 'Manage areas, categories and colours', path: '/areas', icon: 'areas', component: AreasView, toggleable: true },
   { id: 'shutdown', title: 'Evening shutdown', description: 'Nightly review: close out today, pick tomorrow’s top 3', path: null, icon: 'moon', component: null, toggleable: true },
+  { id: 'calendars', title: 'Linked calendars', description: 'Google and Outlook calendars with per-calendar sync switches', path: '/calendars', icon: 'link', component: CalendarsView, toggleable: false, hideInNav: true },
   { id: 'settings', title: 'Settings', description: 'Calendars, notifications, modules', path: '/settings', icon: 'settings', component: SettingsView, toggleable: false },
 ];
 

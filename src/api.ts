@@ -52,6 +52,8 @@ export interface Source {
   last_error: string | null;
   calendarIds?: string[];
   urlHint?: string;
+  eventCount?: number;
+  calendarCounts?: Record<string, number>;
 }
 
 export interface Settings {

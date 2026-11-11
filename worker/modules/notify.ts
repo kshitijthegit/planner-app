@@ -44,7 +44,7 @@ export async function buildDigest(env: Env, settings: Settings, now = new Date()
   const tz = settings.timezone;
   const today = localParts(now, tz).date;
   const { timed, allDay } = await dayAgenda(env, today, tz);
-  const open = await all<TaskRow>(env, 'SELECT * FROM tasks WHERE done_at IS NULL AND parent_id IS NULL ORDER BY priority DESC, due_date');
+  const open = await all<TaskRow>(env, 'SELECT * FROM tasks WHERE done_at IS NULL ORDER BY priority DESC, due_date'); // includes subtasks: they have their own deadlines
   const overdue = open.filter((t) => t.due_date && t.due_date < today);
   const dueToday = open.filter((t) => t.due_date === today);
   let top = open.filter((t) => t.top3_date === today);
@@ -146,7 +146,7 @@ export const notifyModule: BackendModule = {
     ) {
       const left = await all(
         env,
-        'SELECT id FROM tasks WHERE done_at IS NULL AND parent_id IS NULL AND (due_date <= ? OR top3_date = ?)',
+        'SELECT id FROM tasks WHERE done_at IS NULL AND (due_date <= ? OR top3_date = ?)',
         local.date, local.date,
       );
       await sendPush(env, {

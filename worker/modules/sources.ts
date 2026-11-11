@@ -29,7 +29,22 @@ export const sourcesModule: BackendModule = {
     r.get('/api/sources', async ({ env }) => {
       const rows = await all<SourceRow>(env, 'SELECT * FROM sources ORDER BY kind, name');
       const tokens = await kvGet<{ refresh_token?: string }>(env, 'google_tokens');
-      return json({ sources: rows.map(publicSource), googleConnected: !!tokens?.refresh_token });
+      // Event counts per source, and per Google calendar (ext_id = "<calendarId>:<eventId>").
+      const counts = await all<{ source_id: string; cal: string; n: number }>(
+        env,
+        `SELECT source_id, substr(ext_id, 1, instr(ext_id, ':') - 1) AS cal, COUNT(*) AS n FROM ext_events GROUP BY source_id, cal`,
+      );
+      return json({
+        googleConnected: !!tokens?.refresh_token,
+        sources: rows.map((r) => {
+          const mine = counts.filter((c) => c.source_id === r.id);
+          return {
+            ...publicSource(r),
+            eventCount: mine.reduce((a, c) => a + c.n, 0),
+            calendarCounts: r.kind === 'google' ? Object.fromEntries(mine.map((c) => [c.cal, c.n])) : undefined,
+          };
+        }),
+      });
     });
 
     r.post('/api/sources', async ({ env, req }) => {
@@ -56,18 +71,25 @@ export const sourcesModule: BackendModule = {
       if (!src) throw new HttpError(404, 'Source not found');
       const cfg = JSON.parse(src.config || '{}');
       if (src.kind === 'ics' && b.url !== undefined) cfg.url = validUrl(b.url);
-      if (src.kind === 'google' && Array.isArray(b.calendarIds)) cfg.calendarIds = b.calendarIds.filter((x) => typeof x === 'string');
+      let enabled = b.enabled !== undefined ? (b.enabled ? 1 : 0) : src.enabled;
+      if (src.kind === 'google' && Array.isArray(b.calendarIds)) {
+        cfg.calendarIds = b.calendarIds.filter((x) => typeof x === 'string');
+        enabled = cfg.calendarIds.length ? 1 : 0; // Google source is "on" while any of its calendars is on
+      }
       await run(
         env,
         'UPDATE sources SET name = ?, category_id = ?, reminder_min = ?, enabled = ?, config = ? WHERE id = ?',
         typeof b.name === 'string' && b.name ? b.name.slice(0, 80) : src.name,
         b.category_id !== undefined ? b.category_id : src.category_id,
         b.reminder_min !== undefined ? b.reminder_min : src.reminder_min,
-        b.enabled !== undefined ? (b.enabled ? 1 : 0) : src.enabled,
+        enabled,
         JSON.stringify(cfg),
         src.id,
       );
-      if (b.url !== undefined || b.calendarIds !== undefined) {
+      if (!enabled) {
+        // Sync off: stop syncing and remove its events (they come back on the next sync when switched on).
+        await run(env, 'DELETE FROM ext_events WHERE source_id = ?', src.id);
+      } else if (b.url !== undefined || b.calendarIds !== undefined || (b.enabled && !src.enabled)) {
         await syncSource(env, (await first<SourceRow>(env, 'SELECT * FROM sources WHERE id = ?', src.id))!);
       }
       return json({ ok: true });
@@ -90,6 +112,18 @@ export const sourcesModule: BackendModule = {
 
     r.post('/api/sources/sync-all', async ({ env }) => {
       await syncDue(env, true);
+      return json({ ok: true });
+    });
+
+    /** Wipe every event: own events, synced copies and category overrides. Linked calendars stay, with sync off. */
+    r.post('/api/calendar/wipe', async ({ env }) => {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM events'),
+        env.DB.prepare('DELETE FROM ext_events'),
+        env.DB.prepare('DELETE FROM ext_overrides'),
+        env.DB.prepare("UPDATE sources SET enabled = 0, last_sync = NULL, last_error = NULL"),
+        env.DB.prepare(`UPDATE sources SET config = '{"calendarIds":[]}' WHERE kind = 'google'`),
+      ]);
       return json({ ok: true });
     });
 

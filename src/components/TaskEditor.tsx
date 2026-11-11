@@ -3,38 +3,45 @@ import type { Task } from '../api';
 import { fromLocalInput, toLocalInput, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
-import { CategorySelect, Modal, ReminderSelect, TaskLine } from './ui';
+import { CategorySelect, childrenOf, depthOf, MAX_SUBTASK_DEPTH, Modal, ReminderSelect, TaskLine } from './ui';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 
 export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClose: () => void }) {
-  const { saveTask, removeTask, tasks, settings } = useStore();
+  const { saveTask, removeTask, tasks, settings, openEditor } = useStore();
   const [t, setT] = useState<Partial<Task>>({ priority: 0, notes: '', ...initial });
   const [sub, setSub] = useState('');
+  const [subDue, setSubDue] = useState('');
+  const [pending, setPending] = useState<{ title: string; due_date: string | null }[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const today = ymd(new Date());
   const set = <K extends keyof Task>(k: K, v: Task[K] | null) => setT((x) => ({ ...x, [k]: v }));
-  const subtasks = t.id ? tasks.filter((x) => x.parent_id === t.id) : [];
+  const depth = depthOf(tasks, t);
+  const canHaveSubtasks = depth < MAX_SUBTASK_DEPTH;
+  const parent = t.parent_id ? tasks.find((x) => x.id === t.parent_id) : undefined;
 
   async function save() {
     if (!t.title?.trim()) return;
     const draft = { ...t, title: t.title.trim() };
     if (draft.due_time && !draft.due_date) draft.due_date = today;
     if (!initial.id && draft.reminder_min === undefined && (draft.due_time || draft.scheduled_start)) draft.reminder_min = settings.defaultReminderMin;
-    await saveTask(draft);
+    const saved = await saveTask(draft);
+    for (const p of pending) await saveTask({ title: p.title, due_date: p.due_date, parent_id: saved.id, category_id: saved.category_id });
     onClose();
   }
 
   async function addSub(e: React.FormEvent) {
     e.preventDefault();
-    if (!sub.trim() || !t.id) return;
-    await saveTask({ title: sub.trim(), parent_id: t.id, category_id: t.category_id ?? null });
+    if (!sub.trim()) return;
+    if (t.id) await saveTask({ title: sub.trim(), due_date: subDue || null, parent_id: t.id, category_id: t.category_id ?? null });
+    else setPending((p) => [...p, { title: sub.trim(), due_date: subDue || null }]);
     setSub('');
+    setSubDue('');
   }
 
   return (
     <Modal
-      title={t.id ? 'Edit task' : 'New task'}
+      title={t.id ? (depth ? 'Edit subtask' : 'Edit task') : depth ? 'New subtask' : 'New task'}
       onClose={onClose}
       footer={
         <>
@@ -50,6 +57,11 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
         </>
       }
     >
+      {parent && (
+        <button className="link-btn crumb" onClick={() => openEditor({ type: 'task', task: parent })}>
+          <Icon name="left" size={14} /> Subtask of “{parent.title}”
+        </button>
+      )}
       <form className="form" onSubmit={(e) => { e.preventDefault(); save(); }}>
         <label className="field full">
           <span>Title</span>
@@ -117,17 +129,48 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
         </label>
         <button type="submit" hidden />
       </form>
-      {t.id && !t.parent_id && (
-        <section className="subtasks">
-          <h3>Subtasks</h3>
-          {subtasks.map((s) => <TaskLine key={s.id} task={s} compact />)}
-          <form onSubmit={addSub} className="qa-row">
-            <label htmlFor="sub-add" className="sr-only">Add subtask</label>
+      {canHaveSubtasks && (
+        <section className="subtasks" aria-labelledby="subs-h">
+          <h3 id="subs-h">Subtasks <span className="muted small">· each can have its own deadline{depth === 0 ? ' and its own subtasks' : ''}</span></h3>
+          {t.id && childrenOf(tasks, t.id).map((c) => <SubtaskRow key={c.id} task={c} level={depth + 1} />)}
+          {pending.map((p, i) => (
+            <div key={i} className="task-line compact pending">
+              <span className="grow">{p.title}</span>
+              {p.due_date && <span className="muted small">{p.due_date}</span>}
+              <button className="icon-btn small" aria-label={`Remove ${p.title}`} onClick={() => setPending((x) => x.filter((_, j) => j !== i))}><Icon name="close" size={14} /></button>
+            </div>
+          ))}
+          <form onSubmit={addSub} className="qa-row sub-add">
+            <label htmlFor="sub-add" className="sr-only">Subtask title</label>
             <input id="sub-add" value={sub} onChange={(e) => setSub(e.target.value)} placeholder="Add subtask" />
+            <label htmlFor="sub-due" className="sr-only">Subtask deadline</label>
+            <input id="sub-due" type="date" value={subDue} onChange={(e) => setSubDue(e.target.value)} className="date-mini" />
             <button className="btn-ghost icon-only" aria-label="Add subtask" disabled={!sub.trim()}><Icon name="plus" /></button>
           </form>
+          {!t.id && pending.length > 0 && <p className="muted small">Subtasks are created when you save.</p>}
         </section>
       )}
     </Modal>
+  );
+}
+
+/** A subtask in the editor: complete, open, set its own deadline, and (one level down) see its own subtasks. */
+function SubtaskRow({ task, level }: { task: Task; level: number }) {
+  const { tasks, saveTask } = useStore();
+  const kids = childrenOf(tasks, task.id);
+  return (
+    <div className={level > 1 ? 'subtree' : undefined}>
+      <TaskLine
+        task={task}
+        hideCategory
+        extra={
+          <>
+            <label htmlFor={`due-${task.id}`} className="sr-only">Deadline for {task.title}</label>
+            <input id={`due-${task.id}`} type="date" className="date-mini" value={task.due_date ?? ''} onChange={(e) => saveTask({ id: task.id, due_date: e.target.value || null })} />
+          </>
+        }
+      />
+      {level < MAX_SUBTASK_DEPTH && kids.map((k) => <SubtaskRow key={k.id} task={k} level={level + 1} />)}
+    </div>
   );
 }

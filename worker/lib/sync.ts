@@ -26,7 +26,7 @@ export async function syncSource(env: Env, src: SourceRow): Promise<{ count: num
     const config = JSON.parse(src.config || '{}') as { url?: string; calendarIds?: string[] };
     let events: ExtEvent[] = [];
     if (src.kind === 'google') {
-      const ids = config.calendarIds?.length ? config.calendarIds : ['primary'];
+      const ids = config.calendarIds ?? ['primary']; // [] = every calendar switched off
       for (const id of ids) events.push(...(await fetchGoogleEvents(env, id, from, to)));
     } else {
       if (!config.url) throw new Error('No ICS URL set');

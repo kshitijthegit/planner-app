@@ -41,7 +41,7 @@ interface Store {
 const Ctx = createContext<Store | null>(null);
 export const useStore = (): Store => useContext(Ctx)!;
 
-export const NEUTRAL = '#8A8F98';
+export const NEUTRAL = '#93A79C';
 
 interface Boot {
   settings: Settings;

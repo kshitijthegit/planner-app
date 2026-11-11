@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icon';
 import { Dot, Empty } from '../../components/ui';
 import { addDays, fmtDuration, sameDay, startOfDay, startOfWeek, ymd } from '../../lib/date';
 import { buildItems } from '../../lib/items';
+import { navigate } from '../../router';
 import { useAgenda, useIsMobile, useStore } from '../../store';
 import { useNow } from '../today/TodayView';
 import { MonthGrid, TimeGrid } from './TimeGrid';
@@ -95,6 +96,7 @@ export function CalendarView() {
           <button className="icon-btn bordered" aria-label="Previous" onClick={() => step(-1)}><Icon name="left" /></button>
           <button className="icon-btn bordered" aria-label="Next" onClick={() => step(1)}><Icon name="right" /></button>
           <button className="btn-ghost" onClick={() => setAnchor(startOfDay(new Date()))}>Today</button>
+          <button className="icon-btn bordered" aria-label="Linked calendars" title="Linked calendars" onClick={() => navigate('/calendars')}><Icon name="link" /></button>
         </div>
         <h1 className="cal-title">{title}</h1>
         <div className="segmented" role="group" aria-label="View">
@@ -134,7 +136,11 @@ export function CalendarView() {
           ) : (
             <TimeGrid days={days} items={items} now={now} onCreate={newEvent} onDropTask={dropTask} />
           )}
-          {!hasSync && <p className="muted small hint">Tip: connect Google Calendar or your uni Outlook calendar in Settings.</p>}
+          {!hasSync && (
+            <p className="muted small hint">
+              No calendars syncing. <button className="link-btn" onClick={() => navigate('/calendars')}>Manage linked calendars</button>
+            </p>
+          )}
         </section>
         {mobile ? (
           <section className={`tray-sheet${trayOpen ? ' open' : ''}`} aria-label="Unscheduled tasks">
@@ -167,7 +173,7 @@ function TaskTray({ onPlan }: { onPlan?: (t: Task) => void }) {
   const open = tasks.filter((t) => !t.done_at && !t.parent_id && !t.scheduled_start);
   const groups = [
     ...areas.flatMap((a) => categories.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id, label: `${a.name} · ${c.name}`, color: c.color }))),
-    { id: null as string | null, label: 'No category', color: '#8A8F98' },
+    { id: null as string | null, label: 'No category', color: '#93A79C' },
   ]
     .map((g) => ({ ...g, tasks: open.filter((t) => (t.category_id ?? null) === g.id || (g.id === null && t.category_id && !categories.some((c) => c.id === t.category_id))) }))
     .filter((g) => g.tasks.length);

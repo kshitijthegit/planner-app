@@ -15,7 +15,6 @@ export function ShutdownFlow({ onClose }: { onClose: () => void }) {
     () =>
       tasks.filter(
         (t) =>
-          !t.parent_id &&
           (!t.done_at || handled[t.id]) &&
           ((t.due_date && t.due_date <= today) || t.top3_date === today || (t.scheduled_start && sameDay(new Date(t.scheduled_start), new Date()))),
       ),
@@ -43,6 +42,7 @@ export function ShutdownFlow({ onClose }: { onClose: () => void }) {
         {todays.map((t) => (
           <div key={t.id} className={`shutdown-row${handled[t.id] ? ' handled' : ''}`}>
             <span className="grow">
+              {t.parent_id && <span className="muted small">{tasks.find((p) => p.id === t.parent_id)?.title} › </span>}
               <strong>{t.title}</strong>
               <span className="muted small"> {t.due_date ? `· ${relativeDay(t.due_date, today)}` : ''}</span>
             </span>

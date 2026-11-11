@@ -46,7 +46,6 @@ export function taskToItem(t: Task): Item | null {
 export function buildItems(events: CalEvent[], tasks: Task[]): Item[] {
   const items = events.map(eventToItem);
   for (const t of tasks) {
-    if (t.parent_id) continue;
     const it = taskToItem(t);
     if (it) items.push(it);
   }

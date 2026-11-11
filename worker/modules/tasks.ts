@@ -62,6 +62,33 @@ function nextDue(date: string, rule: string): string {
   }
 }
 
+export const MAX_SUBTASK_DEPTH = 2;
+
+/** Depth of a task: 0 = top-level, 1 = subtask, 2 = sub-subtask. */
+async function depthOf(env: Env, id: string): Promise<number> {
+  let depth = 0;
+  let cur = await first<{ parent_id: string | null }>(env, 'SELECT parent_id FROM tasks WHERE id = ?', id);
+  if (!cur) throw new HttpError(400, 'Parent task not found');
+  while (cur?.parent_id && depth < 5) {
+    depth++;
+    cur = await first<{ parent_id: string | null }>(env, 'SELECT parent_id FROM tasks WHERE id = ?', cur.parent_id);
+  }
+  return depth;
+}
+
+async function checkParent(env: Env, parentId: unknown, selfId?: string) {
+  if (parentId == null) return;
+  if (typeof parentId !== 'string') throw new HttpError(400, 'parent_id must be a string');
+  if (parentId === selfId) throw new HttpError(400, 'A task cannot be its own subtask');
+  if ((await depthOf(env, parentId)) + 1 > MAX_SUBTASK_DEPTH)
+    throw new HttpError(400, `Subtasks can only go ${MAX_SUBTASK_DEPTH} levels deep`);
+  if (selfId) {
+    const kids = await first<{ n: number }>(env, 'SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', selfId);
+    if (kids && kids.n > 0 && (await depthOf(env, parentId)) + 2 > MAX_SUBTASK_DEPTH)
+      throw new HttpError(400, `Moving this task would nest subtasks more than ${MAX_SUBTASK_DEPTH} levels deep`);
+  }
+}
+
 async function getTask(env: Env, id: string): Promise<TaskRow> {
   const t = await first<TaskRow>(env, 'SELECT * FROM tasks WHERE id = ?', id);
   if (!t) throw new HttpError(404, 'Task not found');
@@ -80,6 +107,7 @@ export const tasksModule: BackendModule = {
     r.post('/api/tasks', async ({ env, req }) => {
       const b = await readJson(req);
       validate(b, true);
+      await checkParent(env, b.parent_id);
       const id = uuid();
       const now = nowIso();
       const row: Record<string, unknown> = { id, created_at: now, updated_at: now, notes: '', priority: 0, sort: 0 };
@@ -93,12 +121,14 @@ export const tasksModule: BackendModule = {
       const b = await readJson(req);
       validate(b, false);
       await getTask(env, params.id);
+      if (b.parent_id !== undefined) await checkParent(env, b.parent_id, params.id);
       await patchRow(env, 'tasks', params.id, b, FIELDS, { updated_at: nowIso() });
       return json(await getTask(env, params.id));
     });
 
     r.delete('/api/tasks/:id', async ({ env, params }) => {
       await env.DB.batch([
+        env.DB.prepare('DELETE FROM tasks WHERE parent_id IN (SELECT id FROM tasks WHERE parent_id = ?)').bind(params.id),
         env.DB.prepare('DELETE FROM tasks WHERE parent_id = ?').bind(params.id),
         env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(params.id),
       ]);

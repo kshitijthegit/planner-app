@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react';
-import { api, type Source } from '../../api';
+import { api } from '../../api';
 import { Icon } from '../../components/Icon';
-import { CategorySelect, ReminderSelect } from '../../components/ui';
+import { ReminderSelect } from '../../components/ui';
 import { disablePush, enablePush, pushStatus } from '../../lib/push';
 import { useStore } from '../../store';
+import { navigate } from '../../router';
 import { MODULES } from '../registry';
 
-function since(iso: string | null): string {
-  if (!iso) return 'never';
-  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
-  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
-}
 
 export function SettingsView() {
   const { settings, updateSettings, toast } = useStore();
@@ -20,7 +16,13 @@ export function SettingsView() {
         <h1>Settings</h1>
       </header>
       <Notifications />
-      <Calendars />
+      <section className="card settings-card">
+        <h2>Linked calendars</h2>
+        <p className="muted small">Google and Outlook (ICS) calendars, each with its own sync switch.</p>
+        <a className="btn-ghost" href="/calendars" onClick={(e) => { e.preventDefault(); navigate('/calendars'); }}>
+          <Icon name="link" size={16} /> Manage linked calendars
+        </a>
+      </section>
       <section className="card settings-card">
         <h2>Modules</h2>
         <p className="muted small">Turn features on or off. New features will appear here as they’re added.</p>
@@ -121,136 +123,3 @@ function Notifications() {
   );
 }
 
-function Calendars() {
-  const { sources, googleConnected, reloadSources, bumpAgenda, toast } = useStore();
-  const google = sources.find((s) => s.kind === 'google');
-  const ics = sources.filter((s) => s.kind === 'ics');
-  const [adding, setAdding] = useState({ name: 'Uni Outlook', url: '', category_id: 'cat-classes' as string | null, reminder_min: 15 as number | null });
-  const [busy, setBusy] = useState(false);
-
-  async function run(p: Promise<unknown>, ok?: string) {
-    setBusy(true);
-    try {
-      await p;
-      if (ok) toast(ok);
-    } catch (e) {
-      toast((e as Error).message);
-    } finally {
-      setBusy(false);
-      await reloadSources();
-      bumpAgenda();
-    }
-  }
-
-  return (
-    <section className="card settings-card">
-      <h2>Calendars (read-only sync)</h2>
-      <div className="source">
-        <h3>Google Calendar</h3>
-        {!googleConnected || !google ? (
-          <a className="btn-accent" href="/api/auth/login">Connect Google</a>
-        ) : (
-          <SourceControls source={google} onChange={run} busy={busy} />
-        )}
-        {google && <GoogleCalendarPicker source={google} onChange={run} />}
-      </div>
-      {ics.map((s) => (
-        <div key={s.id} className="source">
-          <h3>{s.name} <span className="muted small">({s.urlHint})</span></h3>
-          <SourceControls source={s} onChange={run} busy={busy} removable />
-        </div>
-      ))}
-      <form
-        className="source form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(api.post('/api/sources', { kind: 'ics', ...adding }), 'Calendar added').then(() => setAdding((a) => ({ ...a, url: '' })));
-        }}
-      >
-        <h3 className="field full">Add an ICS calendar (e.g. Outlook “Publish calendar” link)</h3>
-        <label className="field">
-          <span>Name</span>
-          <input value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>ICS link (kept private)</span>
-          <input type="url" value={adding.url} onChange={(e) => setAdding({ ...adding, url: e.target.value })} placeholder="https://outlook.office365.com/…/calendar.ics" />
-        </label>
-        <label className="field">
-          <span>Default category</span>
-          <CategorySelect value={adding.category_id} onChange={(v) => setAdding({ ...adding, category_id: v })} />
-        </label>
-        <label className="field">
-          <span>Reminder</span>
-          <ReminderSelect value={adding.reminder_min} onChange={(v) => setAdding({ ...adding, reminder_min: v })} />
-        </label>
-        <div className="field full">
-          <button className="btn-accent" disabled={busy || !adding.url.trim() || !adding.name.trim()}>Add calendar</button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
-function SourceControls({ source, onChange, busy, removable }: { source: Source; onChange: (p: Promise<unknown>, ok?: string) => Promise<void>; busy: boolean; removable?: boolean }) {
-  const patch = (b: Record<string, unknown>) => onChange(api.patch(`/api/sources/${source.id}`, b));
-  return (
-    <div className="form">
-      <p className={`field full small ${source.last_error ? 'warn' : 'muted'}`}>
-        {source.last_error ? `Last sync failed: ${source.last_error}` : `Synced ${since(source.last_sync)}`}
-      </p>
-      <label className="field">
-        <span>Default category</span>
-        <CategorySelect value={source.category_id} onChange={(v) => patch({ category_id: v })} />
-      </label>
-      <label className="field">
-        <span>Reminder for its events</span>
-        <ReminderSelect value={source.reminder_min} onChange={(v) => patch({ reminder_min: v })} />
-      </label>
-      <label className="field toggle-row">
-        <input type="checkbox" checked={!!source.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
-        <span>Show on calendar</span>
-      </label>
-      <div className="field btn-row">
-        <button type="button" className="btn-ghost" disabled={busy} onClick={() => onChange(api.post(`/api/sources/${source.id}/sync`), 'Synced')}>
-          <Icon name="sync" size={16} /> Sync now
-        </button>
-        {removable && (
-          <button type="button" className="btn-ghost" onClick={() => onChange(api.del(`/api/sources/${source.id}`), 'Removed')}>
-            <Icon name="trash" size={16} /> Remove
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function GoogleCalendarPicker({ source, onChange }: { source: Source; onChange: (p: Promise<unknown>, ok?: string) => Promise<void> }) {
-  const [cals, setCals] = useState<{ id: string; name: string; primary: boolean }[] | null>(null);
-  const selected = source.calendarIds?.length ? source.calendarIds : ['primary'];
-  const isOn = (c: { id: string; primary: boolean }) => selected.includes(c.id) || (c.primary && selected.includes('primary'));
-  if (!cals)
-    return (
-      <button className="link-btn" onClick={() => api.get<typeof cals>('/api/google/calendars').then(setCals).catch(() => setCals([]))}>
-        Choose which Google calendars to show
-      </button>
-    );
-  return (
-    <div className="cal-picker">
-      {cals.length === 0 && <p className="muted small">Couldn’t load calendars.</p>}
-      {cals.map((c) => (
-        <label key={c.id} className="toggle-row">
-          <input
-            type="checkbox"
-            checked={isOn(c)}
-            onChange={(e) => {
-              const ids = cals.filter((x) => (x.id === c.id ? e.target.checked : isOn(x))).map((x) => x.id);
-              onChange(api.patch(`/api/sources/${source.id}`, { calendarIds: ids }), 'Calendars updated');
-            }}
-          />
-          <span>{c.name}{c.primary ? ' (main)' : ''}</span>
-        </label>
-      ))}
-    </div>
-  );
-}

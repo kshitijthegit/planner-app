@@ -84,14 +84,14 @@ function Shell() {
   const nav = (
     <nav aria-label="Main" className={mobile ? 'bottom-nav' : 'rail'}>
       {routed
-        .filter((m) => !(mobile ? false : m.id === 'settings'))
+        .filter((m) => !m.hideInNav && !(mobile ? false : m.id === 'settings'))
         .map((m) => (
           <a
             key={m.id}
             href={m.path!}
             aria-label={m.title}
             aria-current={m === current ? 'page' : undefined}
-            className={m === current ? 'active' : undefined}
+            className={m === current || (m.id === 'settings' && current.id === 'calendars') ? 'active' : undefined}
             onClick={(e) => {
               e.preventDefault();
               navigate(m.path!);
@@ -108,7 +108,7 @@ function Shell() {
             href="/settings"
             aria-label="Settings"
             aria-current={current.id === 'settings' ? 'page' : undefined}
-            className={current.id === 'settings' ? 'active' : undefined}
+            className={current.id === 'settings' || current.id === 'calendars' ? 'active' : undefined}
             onClick={(e) => {
               e.preventDefault();
               navigate('/settings');

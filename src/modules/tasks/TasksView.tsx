@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Task } from '../../api';
 import { QuickAdd } from '../../components/QuickAdd';
-import { Empty, TaskLine } from '../../components/ui';
+import { descendants, Empty, TaskLine, TaskTree } from '../../components/ui';
 import { ymd } from '../../lib/date';
 import { useStore } from '../../store';
 
@@ -15,8 +15,11 @@ export function TasksView() {
   const open = roots.filter((t) => !t.done_at);
 
   const lists: Record<Tab, Task[]> = {
-    today: open.filter((t) => (t.due_date && t.due_date <= today) || t.top3_date === today),
-    upcoming: open.filter((t) => t.due_date && t.due_date > today && t.top3_date !== today),
+    // A top-level task shows in Today if it, or any of its subtasks, is due by today.
+    today: open.filter(
+      (t) => (t.due_date && t.due_date <= today) || t.top3_date === today || descendants(tasks, t.id).some((d) => !d.done_at && d.due_date && d.due_date <= today),
+    ),
+    upcoming: open.filter((t) => t.due_date && t.due_date > today && t.top3_date !== today && !descendants(tasks, t.id).some((d) => !d.done_at && d.due_date && d.due_date <= today)),
     someday: open.filter((t) => !t.due_date && t.top3_date !== today),
     done: roots.filter((t) => t.done_at).sort((a, b) => (b.done_at ?? '').localeCompare(a.done_at ?? '')),
   };
@@ -25,7 +28,7 @@ export function TasksView() {
 
   const groups = [
     ...areas.flatMap((a) => categories.filter((c) => c.area_id === a.id).map((c) => ({ id: c.id as string | null, area: a.name, name: c.name, color: c.color }))),
-    { id: null, area: '', name: 'No category', color: '#8A8F98' },
+    { id: null, area: '', name: 'No category', color: '#93A79C' },
   ];
   const known = new Set(categories.map((c) => c.id));
 
@@ -52,7 +55,7 @@ export function TasksView() {
           return (
             <section key={g.id ?? 'none'} className="section">
               <h2 className="eyebrow" style={{ color: g.color }}>{g.area ? `${g.area} · ${g.name}` : g.name}</h2>
-              <div className="list">{items.map((t) => <TaskLine key={t.id} task={t} />)}</div>
+              <div className="list">{items.map((t) => <TaskTree key={t.id} task={t} hideDone />)}</div>
             </section>
           );
         })

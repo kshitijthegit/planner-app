@@ -41,7 +41,7 @@ export function QuickAdd({ id = 'quick-add', autoFocus, compact, extra }: { id?:
           enterKeyHint="done"
         />
         <button type="submit" className="btn-accent icon-only" aria-label="Add task" disabled={!parsed.title.trim()}>
-          <Icon name="plus" />
+          <Icon name="pencil" />
         </button>
       </div>
       {text && chips.length > 0 && <div className="qa-chips">{chips}</div>}

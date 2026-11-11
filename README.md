@@ -14,6 +14,13 @@ An installable PWA (Android + Windows) on Cloudflare Workers with D1 storage.
 | Push | Web Push. VAPID keys are auto-generated and stored in D1 |
 | Cron | Every 5 min: calendar sync (every 30 min), reminders, 08:00 digest, 21:30 shutdown |
 
+## Features since v1
+
+- Subtasks up to 2 levels deep (task → subtask → sub-subtask), each with its own deadline.
+- **Linked calendars** page (`/calendars`): every Google calendar and ICS feed with its own sync switch. Switching one off removes its events.
+- Phthalo & Coffee theme (Playfair Display + Inter Tight).
+- Migration v2 wiped all calendar data once (Nov 2026). Linked calendars stayed listed, with sync switched off.
+
 ## Modules
 
 Both sides are modular. To add a feature:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Task } from '../api';
 import { relativeDay, ymd } from '../lib/date';
 import { useStore } from '../store';
@@ -98,11 +98,11 @@ export function ReminderSelect({ value, onChange, id }: { value: number | null; 
 const PRIORITY_LABEL = ['', 'Low', 'Medium', 'High'];
 
 /** One task line used in lists. */
-export function TaskLine({ task, compact, extra }: { task: Task; compact?: boolean; extra?: ReactNode }) {
+export function TaskLine({ task, compact, extra, hideCategory }: { task: Task; compact?: boolean; extra?: ReactNode; hideCategory?: boolean }) {
   const { completeTask, reopenTask, openEditor, labelOf, colorOf, tasks } = useStore();
   const today = ymd(new Date());
   const overdue = !task.done_at && task.due_date && task.due_date < today;
-  const subs = tasks.filter((t) => t.parent_id === task.id);
+  const subs = descendants(tasks, task.id);
   const meta: ReactNode[] = [];
   if (task.due_date)
     meta.push(
@@ -120,9 +120,9 @@ export function TaskLine({ task, compact, extra }: { task: Task; compact?: boole
       <Check checked={!!task.done_at} label={`Complete ${task.title}`} onChange={(v) => (v ? completeTask(task.id) : reopenTask(task.id))} />
       <button className="task-main" onClick={() => openEditor({ type: 'task', task })}>
         <span className="task-title">{task.title}</span>
-        {!compact && (meta.length > 0 || task.category_id) && (
+        {!compact && (meta.length > 0 || (task.category_id && !hideCategory)) && (
           <span className="task-meta">
-            {task.category_id && (
+            {task.category_id && !hideCategory && (
               <span className="cat-label" style={{ color: colorOf(task.category_id) }}>
                 {labelOf(task.category_id)}
               </span>
@@ -134,6 +134,59 @@ export function TaskLine({ task, compact, extra }: { task: Task; compact?: boole
       {compact && task.category_id && <Dot color={colorOf(task.category_id)} />}
       {extra}
     </div>
+  );
+}
+
+export const MAX_SUBTASK_DEPTH = 2;
+
+export function childrenOf(tasks: Task[], id: string): Task[] {
+  return tasks.filter((t) => t.parent_id === id).sort((a, b) => (a.due_date ?? '9').localeCompare(b.due_date ?? '9') || a.created_at.localeCompare(b.created_at));
+}
+
+/** All subtasks and sub-subtasks of a task. */
+export function descendants(tasks: Task[], id: string): Task[] {
+  const kids = tasks.filter((t) => t.parent_id === id);
+  return [...kids, ...kids.flatMap((k) => tasks.filter((t) => t.parent_id === k.id))];
+}
+
+export function depthOf(tasks: Task[], task: Partial<Task>): number {
+  let d = 0;
+  let p = task.parent_id;
+  while (p && d < 5) {
+    d++;
+    p = tasks.find((t) => t.id === p)?.parent_id ?? null;
+  }
+  return d;
+}
+
+/** A task with its subtasks (and their subtasks) nested underneath, collapsible. */
+export function TaskTree({ task, depth = 0, hideDone = false }: { task: Task; depth?: number; hideDone?: boolean }) {
+  const { tasks } = useStore();
+  const kids = childrenOf(tasks, task.id).filter((k) => !hideDone || !k.done_at);
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={depth ? 'subtree' : undefined}>
+      <TaskLine
+        task={task}
+        hideCategory={depth > 0}
+        extra={
+          kids.length > 0 && (
+            <button className="icon-btn small" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} subtasks of ${task.title}`} onClick={() => setOpen(!open)}>
+              <Icon name={open ? 'down' : 'right'} size={16} />
+            </button>
+          )
+        }
+      />
+      {open && kids.map((k) => <TaskTree key={k.id} task={k} depth={depth + 1} hideDone={hideDone} />)}
+    </div>
+  );
+}
+
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} className={`switch${checked ? ' on' : ''}`} onClick={() => onChange(!checked)}>
+      <span className="knob" />
+    </button>
   );
 }
 

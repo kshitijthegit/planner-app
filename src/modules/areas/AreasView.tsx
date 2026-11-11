@@ -3,7 +3,7 @@ import { api } from '../../api';
 import { Icon } from '../../components/Icon';
 import { useStore } from '../../store';
 
-const PALETTE = ['#5B9BF5', '#B48CF2', '#E3C567', '#F29B5B', '#6CCB8F', '#F2867A', '#7FB8E8', '#D98FC7'];
+const PALETTE = ['#8EC5E8', '#C7A6E8', '#E8C46A', '#E8956A', '#9ED39A', '#E88A7A', '#7FD1C8', '#E0A3CF'];
 
 function DeleteButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   const [armed, setArmed] = useState(false);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Task } from '../../api';
 import { Icon } from '../../components/Icon';
 import { QuickAdd } from '../../components/QuickAdd';
-import { Check, Dot, Empty, TaskLine } from '../../components/ui';
+import { Check, Dot, Empty, TaskLine, TaskTree } from '../../components/ui';
 import { addDays, fmtDayLong, fmtDuration, fmtTime, greeting, parseYmd, startOfDay, ymd } from '../../lib/date';
 import { buildItems, itemsOnDay, type Item } from '../../lib/items';
 import { navigate } from '../../router';
@@ -37,12 +37,13 @@ export function TodayView() {
   const timed = items.filter((i) => !i.allDay);
   const roots = tasks.filter((t) => !t.parent_id);
   const open = roots.filter((t) => !t.done_at);
-  const overdue = open.filter((t) => t.due_date && t.due_date < today);
-  const dueToday = open.filter((t) => t.due_date === today);
+  const allOpen = tasks.filter((t) => !t.done_at); // subtasks have their own deadlines
+  const overdue = allOpen.filter((t) => t.due_date && t.due_date < today);
+  const dueToday = allOpen.filter((t) => t.due_date === today);
   const top3 = roots.filter((t) => t.top3_date === today).slice(0, 3);
   const eventCount = items.filter((i) => i.kind !== 'task').length;
 
-  const dueMarkers = open.filter((t) => t.due_date === today && t.due_time && !t.scheduled_start);
+  const dueMarkers = allOpen.filter((t) => t.due_date === today && t.due_time && !t.scheduled_start);
   const unscheduled = open
     .filter((t) => !t.scheduled_start && (!t.due_date || t.due_date <= today) && t.top3_date !== today)
     .sort((a, b) => Number(!!b.due_date && b.due_date < today) - Number(!!a.due_date && a.due_date < today) || b.priority - a.priority);
@@ -79,19 +80,23 @@ export function TodayView() {
   ].filter(Boolean);
 
   const top3Section = (
-    <section aria-labelledby="top3-h" className="section">
+    <section aria-labelledby="top3-h" className="section top3-section">
+      {!mobile && <CoffeeRing />}
       <div className="section-head">
-        <h2 id="top3-h" className="eyebrow">Top 3 today</h2>
+        <h2 id="top3-h" className="section-title">Top 3 today</h2>
         <button className="link-btn" onClick={() => openEditor({ type: 'top3' })}>Choose</button>
       </div>
+      {mobile && top3.length > 0 && (
+        <div className="paper-list">
+          {top3.map((t) => <TaskLine key={t.id} task={t} compact />)}
+        </div>
+      )}
       <div className={mobile ? 'top3-list' : 'top3-grid'}>
         {top3.map((t) =>
-          mobile ? (
-            <TaskLine key={t.id} task={t} compact />
-          ) : (
-            <div key={t.id} className={`top3-card${t.done_at ? ' done' : ''}`}>
+          mobile ? null : (
+            <div key={t.id} className={`top3-card paper${t.done_at ? ' done' : ''}`}>
               <div className="top3-row">
-                <span className="cat-label" style={{ color: colorOf(t.category_id) }}>{labelOf(t.category_id)}</span>
+                <span className="cat-label" style={{ color: onPaper(colorOf(t.category_id)), fontWeight: 600 }}>{labelOf(t.category_id)}</span>
                 <Check checked={!!t.done_at} label={`Complete ${t.title}`} onChange={(v) => (v ? completeTask(t.id) : reopenTask(t.id))} />
               </div>
               <button className="top3-title" onClick={() => openEditor({ type: 'task', task: t })}>{t.title}</button>
@@ -110,7 +115,7 @@ export function TodayView() {
 
   const timeline = (
     <section aria-labelledby="tl-h" className="section">
-      <h2 id="tl-h" className="eyebrow">Timeline</h2>
+      <h2 id="tl-h" className="section-title">Timeline</h2>
       {allDay.length > 0 && (
         <div className="allday-row">
           {allDay.map((it) => (
@@ -155,17 +160,20 @@ export function TodayView() {
         </div>
         {unscheduled.length === 0 && <Empty>All clear.</Empty>}
         <div className="list">
-          {unscheduled.slice(0, 12).map((t) => <TaskLine key={t.id} task={t} />)}
+          {unscheduled.slice(0, 12).map((t) => <TaskTree key={t.id} task={t} hideDone />)}
         </div>
       </section>
       {isEnabled(settings.modules, 'shutdown') && (
         <section className="card shutdown-card">
-          <span className="muted small">Tonight, {settings.shutdownTime}</span>
-          <strong>Evening shutdown</strong>
-          <span className="muted small">Close out today and pick tomorrow’s top 3.</span>
-          <button className="btn-ghost" onClick={() => openEditor({ type: 'shutdown' })}>
-            <Icon name="moon" size={16} /> Start now
-          </button>
+          <NotebookArt />
+          <div className="shutdown-body">
+            <span className="muted small">Tonight, {settings.shutdownTime}</span>
+            <strong>Evening shutdown</strong>
+            <span className="muted small">Close out today and pick tomorrow’s top 3.</span>
+            <button className="btn-ghost" onClick={() => openEditor({ type: 'shutdown' })}>
+              <Icon name="moon" size={16} /> Start now
+            </button>
+          </div>
         </section>
       )}
     </>
@@ -174,10 +182,13 @@ export function TodayView() {
   return (
     <div className="today-page">
       <div className="today-main">
-        <header className="page-head">
-          <p className="muted">{greeting(now)}, {settings.displayName}</p>
-          <h1>{fmtDayLong(now)}</h1>
-          <p className="muted">{counts.join(' · ')}</p>
+        <header className="hero">
+          <CoffeeArt />
+          <div className="hero-text">
+            <p>{greeting(now)}, {settings.displayName}</p>
+            <h1>{fmtDayLong(now)}</h1>
+            <p>{counts.join(' · ')}</p>
+          </div>
         </header>
         {top3Section}
         {timeline}
@@ -236,5 +247,54 @@ function TimelineItem({ item }: { item: Item }) {
         <span className="tl-sub">{labelOf(item.categoryId)}{src} · {range}{e.location ? ` · ${e.location}` : ''}</span>
       </button>
     </div>
+  );
+}
+
+/** Darken a category colour so it reads on cream paper. */
+function onPaper(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number, ink: number) => Math.round(c * 0.45 + ink * 0.55);
+  const r = mix((n >> 16) & 255, 0x2b);
+  const g = mix((n >> 8) & 255, 0x1d);
+  const b = mix(n & 255, 0x14);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/** Illustrated stand-in for a coffee flat-lay photo (set --hero-photo on .hero to use a real image). */
+function CoffeeArt() {
+  return (
+    <svg className="hero-art" aria-hidden="true" viewBox="0 0 300 168" preserveAspectRatio="xMaxYMid meet" fill="none">
+      <rect x="150" y="30" width="120" height="150" rx="6" fill="#F3EBDD" opacity="0.92" transform="rotate(-8 210 105)" />
+      <g transform="rotate(-8 210 105)" stroke="#C9B79C" strokeWidth="1">
+        <path d="M162 62h96M162 76h96M162 90h96M162 104h96M162 118h96" />
+      </g>
+      <circle cx="110" cy="84" r="46" fill="#1B120B" />
+      <circle cx="110" cy="84" r="38" fill="#3B2618" />
+      <circle cx="110" cy="84" r="30" fill="#6F4E37" />
+      <path d="M94 80c8-10 24-10 32 0-8 6-24 6-32 0z" fill="#C89F72" opacity="0.8" />
+      <rect x="150" y="118" width="64" height="6" rx="3" fill="#C89F72" transform="rotate(30 182 121)" />
+    </svg>
+  );
+}
+
+function NotebookArt() {
+  return (
+    <svg className="shutdown-art" aria-hidden="true" viewBox="0 0 330 104" preserveAspectRatio="xMidYMid slice" fill="none">
+      <ellipse cx="250" cy="20" rx="120" ry="70" fill="#C89F72" opacity="0.18" />
+      <rect x="60" y="34" width="150" height="88" rx="6" fill="#F3EBDD" transform="rotate(-4 135 78)" />
+      <path d="M135 32v90" stroke="#C9B79C" strokeWidth="1.5" transform="rotate(-4 135 78)" />
+      <g stroke="#C9B79C" strokeWidth="1" transform="rotate(-4 135 78)">
+        <path d="M72 56h54M72 68h54M72 80h54M144 56h54M144 68h54" />
+      </g>
+      <rect x="200" y="70" width="80" height="5" rx="2.5" fill="#6F4E37" transform="rotate(-20 240 72)" />
+    </svg>
+  );
+}
+
+function CoffeeRing() {
+  return (
+    <svg className="coffee-ring" aria-hidden="true" viewBox="0 0 64 64" fill="none">
+      <circle cx="32" cy="32" r="22" stroke="#6F4E37" strokeWidth="4" strokeDasharray="110 8 18 6" />
+    </svg>
   );
 }
