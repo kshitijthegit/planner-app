@@ -4,7 +4,8 @@ import { Icon } from '../../components/Icon';
 import { QuickAdd } from '../../components/QuickAdd';
 import { Check, Dot, Empty, TaskLine, TaskTree } from '../../components/ui';
 import { addDays, fmtDayLong, fmtDuration, fmtTime, greeting, parseYmd, startOfDay, ymd } from '../../lib/date';
-import { buildItems, itemsOnDay, type Item } from '../../lib/items';
+import { buildItems, itemsOnDay, topRowOrder, type Item } from '../../lib/items';
+import { TopPill } from '../calendar/TimeGrid';
 import { navigate } from '../../router';
 import { useAgenda, useIsMobile, useStore } from '../../store';
 import { isEnabled } from '../registry';
@@ -25,15 +26,16 @@ interface Row {
 }
 
 export function TodayView() {
-  const { tasks, settings, openEditor, colorOf, labelOf, completeTask, reopenTask } = useStore();
+  const { tasks, goals, settings, openEditor, colorOf, labelOf, completeTask, reopenTask } = useStore();
   const mobile = useIsMobile();
   const now = useNow();
   const dayStart = useMemo(() => startOfDay(now), [ymd(now)]); // eslint-disable-line react-hooks/exhaustive-deps
   const today = ymd(dayStart);
   const { events } = useAgenda(dayStart, addDays(dayStart, 1));
 
-  const items = useMemo(() => itemsOnDay(buildItems(events, tasks), dayStart), [events, tasks, dayStart]);
-  const allDay = items.filter((i) => i.allDay);
+  const items = useMemo(() => itemsOnDay(buildItems(events, tasks, goals), dayStart), [events, tasks, goals, dayStart]);
+  // Top of the day: all-day events and goals (untimed tasks live in the to-do list).
+  const allDay = items.filter((i) => i.allDay && i.kind !== 'task').sort(topRowOrder);
   const timed = items.filter((i) => !i.allDay);
   const roots = tasks.filter((t) => !t.parent_id);
   const open = roots.filter((t) => !t.done_at);
@@ -41,9 +43,7 @@ export function TodayView() {
   const overdue = allOpen.filter((t) => t.due_date && t.due_date < today);
   const dueToday = allOpen.filter((t) => t.due_date === today);
   const top3 = roots.filter((t) => t.top3_date === today).slice(0, 3);
-  const eventCount = items.filter((i) => i.kind !== 'task').length;
-
-  const dueMarkers = allOpen.filter((t) => t.due_date === today && t.due_time && !t.scheduled_start);
+  const eventCount = items.filter((i) => i.kind === 'own' || i.kind === 'ext').length;
   const unscheduled = open
     .filter((t) => !t.scheduled_start && (!t.due_date || t.due_date <= today) && t.top3_date !== today)
     .sort((a, b) => Number(!!b.due_date && b.due_date < today) - Number(!!a.due_date && a.due_date < today) || b.priority - a.priority);
@@ -51,25 +51,6 @@ export function TodayView() {
   // Timeline rows: events + time blocks + due-time markers, with a "now" line.
   const rows: Row[] = [
     ...timed.map((it) => ({ key: it.key, at: it.start, node: <TimelineItem item={it} /> })),
-    ...dueMarkers.map((t) => {
-      const [h, m] = t.due_time!.split(':').map(Number);
-      const at = new Date(dayStart);
-      at.setHours(h, m);
-      return {
-        key: `due:${t.id}`,
-        at,
-        node: (
-          <div className="tl-card due">
-            <span className="tl-bar" style={{ background: colorOf(t.category_id) }} />
-            <Check checked={false} label={`Complete ${t.title}`} onChange={() => completeTask(t.id)} />
-            <button className="tl-body" onClick={() => openEditor({ type: 'task', task: t })}>
-              <span className="tl-title">{t.title}</span>
-              <span className="tl-sub">Due {t.due_time} · {labelOf(t.category_id)}</span>
-            </button>
-          </div>
-        ),
-      };
-    }),
   ].sort((a, b) => a.at.getTime() - b.at.getTime());
   const nowIdx = rows.findIndex((r) => r.at > now);
 
@@ -118,11 +99,7 @@ export function TodayView() {
       <h2 id="tl-h" className="section-title">Timeline</h2>
       {allDay.length > 0 && (
         <div className="allday-row">
-          {allDay.map((it) => (
-            <button key={it.key} className="chip" onClick={() => it.event && openEditor({ type: 'event', event: it.event })}>
-              <Dot color={colorOf(it.categoryId)} /> {it.title}
-            </button>
-          ))}
+          {allDay.map((it) => <TopPill key={it.key} item={it} />)}
         </div>
       )}
       {rows.length === 0 && <Empty>Nothing scheduled. Drag tasks onto the calendar to time-block them.</Empty>}
@@ -149,7 +126,10 @@ export function TodayView() {
     <>
       {!mobile && (
         <section className="section">
-          <h2 className="eyebrow">Quick add</h2>
+          <div className="section-head">
+            <h2 className="eyebrow">Quick add</h2>
+            <button className="link-btn" onClick={() => openEditor({ type: 'task', task: {} })}>＋ Event, task or goal</button>
+          </div>
           <QuickAdd extra={{ due_date: null }} />
         </section>
       )}
@@ -232,7 +212,7 @@ function TimelineItem({ item }: { item: Item }) {
         <Check checked={!!t.done_at} label={`Complete ${t.title}`} onChange={(v) => (v ? completeTask(t.id) : reopenTask(t.id))} />
         <button className="tl-body" onClick={() => openEditor({ type: 'task', task: t })}>
           <span className="tl-title">{t.title}</span>
-          <span className="tl-sub">Time block · {range}</span>
+          <span className="tl-sub">{t.scheduled_start ? `Time block · ${range}` : `Due ${t.due_time}`} · {labelOf(item.categoryId)}</span>
         </button>
       </div>
     );

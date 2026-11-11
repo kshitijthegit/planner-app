@@ -1,18 +1,21 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { CalEvent } from '../api';
 import { addDays, fmtDayShort, fmtTime, fromLocalInput, parseYmd, toLocalInput, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
-import { CategorySelect, Modal, ReminderSelect } from './ui';
+import { AreaSelect, CategorySelect, Modal, PrioritySelect, ReminderSelect } from './ui';
 
-export function EventEditor({ initial, onClose }: { initial: Partial<CalEvent>; onClose: () => void }) {
+export function EventEditor({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
   if (initial.kind === 'ext') return <ExternalEvent ev={initial as CalEvent} onClose={onClose} />;
-  return <OwnEvent initial={initial} onClose={onClose} />;
+  return <OwnEvent initial={initial} onClose={onClose} top={top} />;
 }
 
-function OwnEvent({ initial, onClose }: { initial: Partial<CalEvent>; onClose: () => void }) {
-  const { saveEvent, removeEvent, settings } = useStore();
-  const [e, setE] = useState<Partial<CalEvent>>({ all_day: 0, location: '', notes: '', reminder_min: initial.id ? null : settings.defaultReminderMin, ...initial });
+function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
+  const { saveEvent, removeEvent, settings, areaIdOf } = useStore();
+  const [e, setE] = useState<Partial<CalEvent>>({
+    all_day: 0, location: '', notes: '', priority: 0, reminder_min: initial.id ? null : settings.defaultReminderMin,
+    ...initial, area_id: initial.area_id ?? areaIdOf(initial),
+  });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof CalEvent>(k: K, v: CalEvent[K] | null) => setE((x) => ({ ...x, [k]: v }));
   const allDay = !!e.all_day;
@@ -30,7 +33,8 @@ function OwnEvent({ initial, onClose }: { initial: Partial<CalEvent>; onClose: (
 
   async function save() {
     if (!e.title?.trim() || !e.start_at || !e.end_at) return;
-    await saveEvent({ ...e, title: e.title.trim() });
+    const { source_id: _s, ext_id: _x, series_id: _r, source_name: _n, source_kind: _k, ...own } = e;
+    await saveEvent({ ...own, title: e.title.trim() });
     onClose();
   }
 
@@ -52,14 +56,23 @@ function OwnEvent({ initial, onClose }: { initial: Partial<CalEvent>; onClose: (
         </>
       }
     >
+      {top}
       <form className="form" onSubmit={(ev) => { ev.preventDefault(); save(); }}>
         <label className="field full">
           <span>Title</span>
           <input value={e.title ?? ''} onChange={(x) => set('title', x.target.value)} placeholder="Event name" />
         </label>
         <label className="field">
-          <span>Category</span>
-          <CategorySelect value={e.category_id ?? null} onChange={(v) => set('category_id', v)} />
+          <span>Area</span>
+          <AreaSelect value={e.area_id ?? null} onChange={(v) => setE((x) => ({ ...x, area_id: v, category_id: null }))} />
+        </label>
+        <label className="field">
+          <span>Sub-category</span>
+          <CategorySelect areaId={e.area_id} value={e.category_id ?? null} onChange={(v) => set('category_id', v)} />
+        </label>
+        <label className="field">
+          <span>Priority</span>
+          <PrioritySelect value={e.priority ?? 0} onChange={(v) => set('priority', v)} />
         </label>
         <label className="field toggle-row">
           <input type="checkbox" checked={allDay} onChange={(x) => toggleAllDay(x.target.checked)} />
@@ -142,7 +155,7 @@ function ExternalEvent({ ev, onClose }: { ev: CalEvent; onClose: () => void }) {
         <p className="field full muted">{when}{ev.location ? ` · ${ev.location}` : ''}</p>
         <p className="field full muted">From {ev.source_name} (read-only — edit it in the original calendar)</p>
         <label className="field full">
-          <span>Category for this event and all its repeats</span>
+          <span>Sub-category for this event and all its repeats</span>
           <CategorySelect value={cat} onChange={setCat} />
         </label>
       </div>

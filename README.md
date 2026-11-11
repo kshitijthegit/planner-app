@@ -19,6 +19,13 @@ An installable PWA (Android + Windows) on Cloudflare Workers with D1 storage.
 - Subtasks up to 2 levels deep (task → subtask → sub-subtask), each with its own deadline.
 - **Linked calendars** page (`/calendars`): every Google calendar and ICS feed with its own sync switch. Switching one off removes its events.
 - Phthalo & Coffee theme (Playfair Display + Inter Tight).
+- Three item types:
+  - **Events:** filled blocks in their area colour. All-day events turn the whole day white.
+  - **Tasks:** thin blocks with a check. Untimed tasks sit at the top of the day.
+  - **Goals:** unfilled blocks at the top of each day they cover, stored in the `goals` table.
+- Areas are Personal (espresso), University (mocha) and Work (latte). Calendar filters are per area.
+- Adding something is two steps: first pick the area, then fill in the details. Every dropdown can add a new option: area, sub-category, priority level, reminder, duration and repeat (`every:N:day|week|month`).
+- The week and day views fit all 24 hours on screen, with no scrolling.
 - Migration v2 wiped all calendar data once (Nov 2026). Linked calendars stayed listed, with sync switched off.
 
 ## Modules

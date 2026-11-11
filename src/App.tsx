@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { AddFlow } from './components/AddFlow';
 import { EventEditor } from './components/EventEditor';
+import { GoalEditor } from './components/GoalEditor';
 import { Icon } from './components/Icon';
 import { TaskEditor } from './components/TaskEditor';
 import { isEnabled, MODULES } from './modules/registry';
@@ -128,8 +130,15 @@ function Shell() {
         <Page />
       </main>
       {mobile && nav}
-      {editor?.type === 'task' && <TaskEditor initial={editor.task} onClose={() => openEditor(null)} />}
-      {editor?.type === 'event' && <EventEditor initial={editor.event} onClose={() => openEditor(null)} />}
+      {editor?.type === 'task' && (editor.task.id || editor.task.parent_id
+        ? <TaskEditor key={editor.task.id ?? 'new'} initial={editor.task} onClose={() => openEditor(null)} />
+        : <AddFlow kind="task" initial={editor.task} onClose={() => openEditor(null)} />)}
+      {editor?.type === 'event' && (editor.event.id || editor.event.kind === 'ext'
+        ? <EventEditor initial={editor.event} onClose={() => openEditor(null)} />
+        : <AddFlow kind="event" initial={editor.event} onClose={() => openEditor(null)} />)}
+      {editor?.type === 'goal' && (editor.goal.id
+        ? <GoalEditor initial={editor.goal} onClose={() => openEditor(null)} />
+        : <AddFlow kind="goal" initial={editor.goal} onClose={() => openEditor(null)} />)}
       {editor?.type === 'shutdown' && <ShutdownFlow onClose={() => openEditor(null)} />}
       {editor?.type === 'top3' && <Top3Picker onClose={() => openEditor(null)} />}
       <div className="toasts" role="status" aria-live="polite">

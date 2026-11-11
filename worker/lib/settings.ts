@@ -10,6 +10,8 @@ export interface Settings {
   defaultReminderMin: number | null;
   /** Feature-module toggles. Missing key = enabled. */
   modules: Record<string, boolean>;
+  /** Priority level names, index = stored value. Users can add levels (max 10). */
+  priorityLabels: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,6 +23,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shutdownEnabled: true,
   defaultReminderMin: 15,
   modules: {},
+  priorityLabels: ['None', 'Low', 'Medium', 'High'],
 };
 
 export async function getSettings(env: Env): Promise<Settings> {
@@ -47,6 +50,10 @@ export async function saveSettings(env: Env, patch: Partial<Settings>): Promise<
   if (typeof patch.shutdownEnabled === 'boolean') next.shutdownEnabled = patch.shutdownEnabled;
   if (patch.defaultReminderMin === null || typeof patch.defaultReminderMin === 'number')
     next.defaultReminderMin = patch.defaultReminderMin;
+  if (Array.isArray(patch.priorityLabels)) {
+    const labels = patch.priorityLabels.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, 24)).slice(0, 10);
+    if (labels.length >= 1) next.priorityLabels = labels;
+  }
   if (patch.modules && typeof patch.modules === 'object') {
     next.modules = { ...current.modules };
     for (const [k, v] of Object.entries(patch.modules)) if (typeof v === 'boolean') next.modules[k] = v;

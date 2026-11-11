@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Task } from '../api';
 import { fromLocalInput, toLocalInput, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
-import { CategorySelect, childrenOf, depthOf, MAX_SUBTASK_DEPTH, Modal, ReminderSelect, TaskLine } from './ui';
+import { AreaSelect, CategorySelect, childrenOf, depthOf, DurationSelect, MAX_SUBTASK_DEPTH, Modal, PrioritySelect, ReminderSelect, RepeatSelect, TaskLine } from './ui';
 
-const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
-
-export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClose: () => void }) {
-  const { saveTask, removeTask, tasks, settings, openEditor } = useStore();
-  const [t, setT] = useState<Partial<Task>>({ priority: 0, notes: '', ...initial });
+export function TaskEditor({ initial, onClose, top }: { initial: Partial<Task>; onClose: () => void; top?: ReactNode }) {
+  const { saveTask, removeTask, tasks, settings, openEditor, areaIdOf } = useStore();
+  const [t, setT] = useState<Partial<Task>>({ priority: 0, notes: '', ...initial, area_id: initial.area_id ?? areaIdOf(initial) });
   const [sub, setSub] = useState('');
   const [subDue, setSubDue] = useState('');
   const [pending, setPending] = useState<{ title: string; due_date: string | null }[]>([]);
@@ -26,14 +24,14 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
     if (draft.due_time && !draft.due_date) draft.due_date = today;
     if (!initial.id && draft.reminder_min === undefined && (draft.due_time || draft.scheduled_start)) draft.reminder_min = settings.defaultReminderMin;
     const saved = await saveTask(draft);
-    for (const p of pending) await saveTask({ title: p.title, due_date: p.due_date, parent_id: saved.id, category_id: saved.category_id });
+    for (const p of pending) await saveTask({ title: p.title, due_date: p.due_date, parent_id: saved.id, category_id: saved.category_id, area_id: saved.area_id });
     onClose();
   }
 
   async function addSub(e: React.FormEvent) {
     e.preventDefault();
     if (!sub.trim()) return;
-    if (t.id) await saveTask({ title: sub.trim(), due_date: subDue || null, parent_id: t.id, category_id: t.category_id ?? null });
+    if (t.id) await saveTask({ title: sub.trim(), due_date: subDue || null, parent_id: t.id, category_id: t.category_id ?? null, area_id: t.area_id ?? null });
     else setPending((p) => [...p, { title: sub.trim(), due_date: subDue || null }]);
     setSub('');
     setSubDue('');
@@ -57,6 +55,7 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
         </>
       }
     >
+      {top}
       {parent && (
         <button className="link-btn crumb" onClick={() => openEditor({ type: 'task', task: parent })}>
           <Icon name="left" size={14} /> Subtask of “{parent.title}”
@@ -68,17 +67,16 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
           <input value={t.title ?? ''} onChange={(e) => set('title', e.target.value)} placeholder="What needs doing?" />
         </label>
         <label className="field">
-          <span>Category</span>
-          <CategorySelect value={t.category_id ?? null} onChange={(v) => set('category_id', v)} />
+          <span>Area</span>
+          <AreaSelect value={t.area_id ?? null} onChange={(v) => setT((x) => ({ ...x, area_id: v, category_id: null }))} />
+        </label>
+        <label className="field">
+          <span>Sub-category</span>
+          <CategorySelect areaId={t.area_id} value={t.category_id ?? null} onChange={(v) => set('category_id', v)} />
         </label>
         <label className="field">
           <span>Priority</span>
-          <select value={t.priority ?? 0} onChange={(e) => set('priority', Number(e.target.value))}>
-            <option value={0}>None</option>
-            <option value={1}>Low</option>
-            <option value={2}>Medium</option>
-            <option value={3}>High</option>
-          </select>
+          <PrioritySelect value={t.priority ?? 0} onChange={(v) => set('priority', v)} />
         </label>
         <label className="field">
           <span>Due date</span>
@@ -98,12 +96,7 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
         </label>
         <label className="field">
           <span>Duration</span>
-          <select value={t.duration_min ?? ''} onChange={(e) => set('duration_min', e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Not set</option>
-            {DURATIONS.map((d) => (
-              <option key={d} value={d}>{d < 60 ? `${d} min` : `${d / 60} h`}</option>
-            ))}
-          </select>
+          <DurationSelect value={t.duration_min ?? null} onChange={(v) => set('duration_min', v)} />
         </label>
         <label className="field">
           <span>Reminder</span>
@@ -111,13 +104,7 @@ export function TaskEditor({ initial, onClose }: { initial: Partial<Task>; onClo
         </label>
         <label className="field">
           <span>Repeat</span>
-          <select value={t.recurrence ?? ''} onChange={(e) => set('recurrence', (e.target.value || null) as Task['recurrence'])}>
-            <option value="">Never</option>
-            <option value="daily">Daily</option>
-            <option value="weekdays">Weekdays</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
+          <RepeatSelect value={t.recurrence ?? null} onChange={(v) => set('recurrence', v)} />
         </label>
         <label className="field full toggle-row">
           <input type="checkbox" checked={t.top3_date === today} onChange={(e) => set('top3_date', e.target.checked ? today : null)} />

@@ -8,6 +8,7 @@ export interface TaskRow {
   title: string;
   notes: string;
   category_id: string | null;
+  area_id: string | null;
   priority: number;
   due_date: string | null;
   due_time: string | null;
@@ -24,10 +25,16 @@ export interface TaskRow {
 }
 
 const FIELDS = [
-  'title', 'notes', 'category_id', 'priority', 'due_date', 'due_time', 'duration_min',
+  'title', 'notes', 'category_id', 'area_id', 'priority', 'due_date', 'due_time', 'duration_min',
   'scheduled_start', 'recurrence', 'parent_id', 'top3_date', 'reminder_min', 'sort',
 ];
 const RECURRENCES = ['daily', 'weekdays', 'weekly', 'monthly'];
+/** Custom repeat, e.g. "every:3:day", "every:2:week", "every:6:month". */
+export const CUSTOM_RECURRENCE = /^every:([1-9]\d{0,2}):(day|week|month)$/;
+
+export function validPriority(p: unknown) {
+  if (p != null && !(Number.isInteger(p) && (p as number) >= 0 && (p as number) <= 9)) throw new HttpError(400, 'priority must be 0-9');
+}
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -39,14 +46,20 @@ function validate(b: Record<string, unknown>, creating: boolean) {
   if (b.due_time != null && (typeof b.due_time !== 'string' || !TIME.test(b.due_time))) throw new HttpError(400, 'due_time must be HH:MM');
   if (b.scheduled_start != null && (typeof b.scheduled_start !== 'string' || isNaN(Date.parse(b.scheduled_start))))
     throw new HttpError(400, 'scheduled_start must be an ISO date-time');
-  if (b.recurrence != null && !RECURRENCES.includes(b.recurrence as string)) throw new HttpError(400, 'bad recurrence');
-  if (b.priority != null && ![0, 1, 2, 3].includes(Number(b.priority))) throw new HttpError(400, 'priority must be 0-3');
+  if (b.recurrence != null && !RECURRENCES.includes(b.recurrence as string) && !CUSTOM_RECURRENCE.test(String(b.recurrence)))
+    throw new HttpError(400, 'bad recurrence');
+  validPriority(b.priority);
   for (const k of ['duration_min', 'reminder_min'])
     if (b[k] != null && (!Number.isInteger(b[k]) || (b[k] as number) < 0 || (b[k] as number) > 100000))
       throw new HttpError(400, `${k} must be a whole number`);
 }
 
-function nextDue(date: string, rule: string): string {
+export function nextDue(date: string, rule: string): string {
+  const custom = CUSTOM_RECURRENCE.exec(rule);
+  if (custom) {
+    const n = Number(custom[1]);
+    return custom[2] === 'day' ? addDaysIso(date, n) : custom[2] === 'week' ? addDaysIso(date, 7 * n) : addMonthsIso(date, n);
+  }
   switch (rule) {
     case 'daily':
       return addDaysIso(date, 1);
@@ -147,9 +160,9 @@ export const tasksModule: BackendModule = {
         const id = uuid();
         await run(
           env,
-          `INSERT INTO tasks (id, title, notes, category_id, priority, due_date, due_time, duration_min, recurrence, reminder_min, created_at, updated_at, sort)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          id, t.title, t.notes, t.category_id, t.priority, nextDue(base, t.recurrence), t.due_time, t.duration_min,
+          `INSERT INTO tasks (id, title, notes, category_id, area_id, priority, due_date, due_time, duration_min, recurrence, reminder_min, created_at, updated_at, sort)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, t.title, t.notes, t.category_id, t.area_id, t.priority, nextDue(base, t.recurrence), t.due_time, t.duration_min,
           t.recurrence, t.reminder_min, now, now, t.sort,
         );
         next = await getTask(env, id);

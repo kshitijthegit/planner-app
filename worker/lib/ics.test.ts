@@ -99,3 +99,13 @@ describe('normalizeEmail', () => {
     expect(normalizeEmail('a.b@uni.edu.sg')).toBe('a.b@uni.edu.sg');
   });
 });
+
+import { nextDue } from '../modules/tasks';
+describe('custom recurrence', () => {
+  it('advances every N days/weeks/months', () => {
+    expect(nextDue('2026-11-11', 'every:3:day')).toBe('2026-11-14');
+    expect(nextDue('2026-11-11', 'every:2:week')).toBe('2026-11-25');
+    expect(nextDue('2026-01-31', 'every:1:month')).toBe('2026-02-28');
+    expect(nextDue('2026-11-13', 'weekdays')).toBe('2026-11-16');
+  });
+});

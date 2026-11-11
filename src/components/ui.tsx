@@ -52,23 +52,104 @@ export function Dot({ color, size = 8 }: { color: string; size?: number }) {
   return <span className="dot" style={{ background: color, width: size, height: size }} />;
 }
 
-export function CategorySelect({ value, onChange, id, allowNone = true }: { value: string | null; onChange: (v: string | null) => void; id?: string; allowNone?: boolean }) {
-  const { areas, categories } = useStore();
+interface Opt {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+/**
+ * A dropdown whose last option lets you add a new option inline.
+ * onCreate gets the typed text and returns the new option's value (or null to cancel).
+ */
+export function CreatableSelect({
+  id, value, options, onChange, newLabel, onCreate, inputType = 'text', inputHint, ariaLabel,
+}: {
+  id?: string;
+  value: string;
+  options: Opt[];
+  onChange: (v: string) => void;
+  newLabel?: string;
+  onCreate?: (text: string) => Promise<string | null> | string | null;
+  inputType?: string;
+  inputHint?: string;
+  ariaLabel?: string;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [text, setText] = useState('');
+  const groups = [...new Set(options.map((o) => o.group ?? ''))];
+  async function add() {
+    if (!text.trim() || !onCreate) return;
+    const v = await onCreate(text.trim());
+    if (v !== null) onChange(v);
+    setCreating(false);
+    setText('');
+  }
+  if (creating)
+    return (
+      <span className="creatable-new">
+        <input
+          id={id}
+          autoFocus
+          type={inputType}
+          value={text}
+          placeholder={inputHint}
+          aria-label={ariaLabel ?? newLabel}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); add(); }
+            if (e.key === 'Escape') { e.stopPropagation(); setCreating(false); }
+          }}
+        />
+        <button type="button" className="btn-accent small-btn" onClick={add} disabled={!text.trim()}>Add</button>
+        <button type="button" className="btn-ghost small-btn" onClick={() => setCreating(false)}>Cancel</button>
+      </span>
+    );
+  const render = (o: Opt) => <option key={o.value} value={o.value}>{o.label}</option>;
   return (
-    <select id={id} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
-      {allowNone && <option value="">No category</option>}
-      {areas.map((a) => (
-        <optgroup key={a.id} label={a.name}>
-          {categories
-            .filter((c) => c.area_id === a.id)
-            .map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-        </optgroup>
-      ))}
+    <select id={id} aria-label={ariaLabel} value={value} onChange={(e) => (e.target.value === '__new__' ? setCreating(true) : onChange(e.target.value))}>
+      {groups.length > 1
+        ? groups.map((g) => (g ? <optgroup key={g} label={g}>{options.filter((o) => o.group === g).map(render)}</optgroup> : options.filter((o) => !o.group).map(render)))
+        : options.map(render)}
+      {onCreate && newLabel && <option value="__new__">＋ {newLabel}</option>}
     </select>
+  );
+}
+
+export function AreaSelect({ value, onChange, id }: { value: string | null; onChange: (v: string) => void; id?: string }) {
+  const { areas, createArea } = useStore();
+  return (
+    <CreatableSelect
+      id={id}
+      value={value ?? ''}
+      options={areas.map((a) => ({ value: a.id, label: a.name }))}
+      onChange={onChange}
+      newLabel="New area…"
+      inputHint="Area name"
+      onCreate={async (name) => (await createArea(name)).id}
+    />
+  );
+}
+
+/** Sub-category picker. With areaId it lists that area's sub-categories and can create new ones. */
+export function CategorySelect({ value, onChange, id, allowNone = true, areaId }: { value: string | null; onChange: (v: string | null) => void; id?: string; allowNone?: boolean; areaId?: string | null }) {
+  const { areas, categories, createCategory } = useStore();
+  const opts: Opt[] = [
+    ...(allowNone ? [{ value: '', label: areaId ? 'No sub-category' : 'No category' }] : []),
+    ...(areaId
+      ? categories.filter((c) => c.area_id === areaId).map((c) => ({ value: c.id, label: c.name }))
+      : areas.flatMap((a) => categories.filter((c) => c.area_id === a.id).map((c) => ({ value: c.id, label: c.name, group: a.name })))),
+  ];
+  return (
+    <CreatableSelect
+      id={id}
+      value={value ?? ''}
+      options={opts}
+      onChange={(v) => onChange(v || null)}
+      newLabel={areaId ? 'New sub-category…' : undefined}
+      inputHint="Sub-category name"
+      onCreate={areaId ? async (name) => (await createCategory(areaId, name)).id : undefined}
+    />
   );
 }
 
@@ -83,23 +164,134 @@ export const REMINDER_OPTIONS: [string, number | null][] = [
   ['1 day before', 1440],
 ];
 
+function minutesLabel(m: number): string {
+  if (m === 0) return 'At time';
+  if (m % 1440 === 0) return `${m / 1440} day${m === 1440 ? '' : 's'} before`;
+  if (m % 60 === 0) return `${m / 60} hour${m === 60 ? '' : 's'} before`;
+  return `${m} min before`;
+}
+
+/** Parse "45", "45m", "2h", "1d" → minutes. */
+function parseMinutes(t: string): number | null {
+  const m = /^(\d+(?:\.\d+)?)\s*(m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)?$/i.exec(t.trim());
+  if (!m) return null;
+  const n = Number(m[1]);
+  const u = (m[2] ?? 'm').toLowerCase()[0];
+  const v = Math.round(u === 'h' ? n * 60 : u === 'd' ? n * 1440 : n);
+  return v >= 0 && v <= 100000 ? v : null;
+}
+
 export function ReminderSelect({ value, onChange, id }: { value: number | null; onChange: (v: number | null) => void; id?: string }) {
+  const { toast } = useStore();
+  const opts: Opt[] = REMINDER_OPTIONS.map(([label, v]) => ({ value: v === null ? '' : String(v), label }));
+  if (value !== null && !opts.some((o) => o.value === String(value))) opts.push({ value: String(value), label: minutesLabel(value) });
   return (
-    <select id={id} value={value === null ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}>
-      {REMINDER_OPTIONS.map(([label, v]) => (
-        <option key={label} value={v === null ? '' : String(v)}>
-          {label}
-        </option>
-      ))}
-    </select>
+    <CreatableSelect
+      id={id}
+      value={value === null ? '' : String(value)}
+      options={opts}
+      onChange={(v) => onChange(v === '' ? null : Number(v))}
+      newLabel="Custom reminder…"
+      inputHint="e.g. 45m, 2h, 3d before"
+      onCreate={(t) => {
+        const m = parseMinutes(t);
+        if (m === null) toast('Try something like 45m, 2h or 3d');
+        return m === null ? null : String(m);
+      }}
+    />
   );
 }
 
-const PRIORITY_LABEL = ['', 'Low', 'Medium', 'High'];
+const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
+
+export function durationLabel(d: number): string {
+  return d < 60 ? `${d} min` : d % 60 ? `${Math.floor(d / 60)} h ${d % 60} min` : `${d / 60} h`;
+}
+
+export function DurationSelect({ value, onChange, id }: { value: number | null; onChange: (v: number | null) => void; id?: string }) {
+  const { toast } = useStore();
+  const opts: Opt[] = [{ value: '', label: 'Not set' }, ...DURATIONS.map((d) => ({ value: String(d), label: durationLabel(d) }))];
+  if (value !== null && !DURATIONS.includes(value)) opts.push({ value: String(value), label: durationLabel(value) });
+  return (
+    <CreatableSelect
+      id={id}
+      value={value === null ? '' : String(value)}
+      options={opts}
+      onChange={(v) => onChange(v ? Number(v) : null)}
+      newLabel="Custom duration…"
+      inputHint="e.g. 20m, 1.5h"
+      onCreate={(t) => {
+        const m = parseMinutes(t);
+        if (!m) toast('Try something like 20m or 1.5h');
+        return m ? String(m) : null;
+      }}
+    />
+  );
+}
+
+export function PrioritySelect({ value, onChange, id }: { value: number; onChange: (v: number) => void; id?: string }) {
+  const { settings, updateSettings } = useStore();
+  const labels = settings.priorityLabels;
+  return (
+    <CreatableSelect
+      id={id}
+      value={String(value)}
+      options={labels.map((l, i) => ({ value: String(i), label: l }))}
+      onChange={(v) => onChange(Number(v))}
+      newLabel={labels.length < 10 ? 'New priority level…' : undefined}
+      inputHint="e.g. Critical (ranks above the rest)"
+      onCreate={async (t) => {
+        await updateSettings({ priorityLabels: [...labels, t] });
+        return String(labels.length);
+      }}
+    />
+  );
+}
+
+const REPEATS: Opt[] = [
+  { value: '', label: 'Never' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+export function repeatLabel(r: string | null): string {
+  if (!r) return 'Never';
+  const m = /^every:(\d+):(day|week|month)$/.exec(r);
+  if (m) return `Every ${m[1]} ${m[2]}${m[1] === '1' ? '' : 's'}`;
+  return REPEATS.find((o) => o.value === r)?.label ?? r;
+}
+
+export function RepeatSelect({ value, onChange, id }: { value: string | null; onChange: (v: string | null) => void; id?: string }) {
+  const { toast } = useStore();
+  const opts = [...REPEATS];
+  if (value && !opts.some((o) => o.value === value)) opts.push({ value, label: repeatLabel(value) });
+  return (
+    <CreatableSelect
+      id={id}
+      value={value ?? ''}
+      options={opts}
+      onChange={(v) => onChange(v || null)}
+      newLabel="Custom repeat…"
+      inputHint="e.g. 3 days, 2 weeks, 6 months"
+      onCreate={(t) => {
+        const m = /^(?:every\s+)?(\d{1,3})\s*(d|day|days|w|wk|week|weeks|m|mo|month|months)$/i.exec(t.trim());
+        if (!m || Number(m[1]) < 1) {
+          toast('Try something like 3 days, 2 weeks or 6 months');
+          return null;
+        }
+        const u = m[2].toLowerCase()[0];
+        return `every:${Number(m[1])}:${u === 'd' ? 'day' : u === 'w' ? 'week' : 'month'}`;
+      }}
+    />
+  );
+}
+
 
 /** One task line used in lists. */
 export function TaskLine({ task, compact, extra, hideCategory }: { task: Task; compact?: boolean; extra?: ReactNode; hideCategory?: boolean }) {
-  const { completeTask, reopenTask, openEditor, labelOf, colorOf, tasks } = useStore();
+  const { completeTask, reopenTask, openEditor, labelOf, colorOf, tasks, settings } = useStore();
   const today = ymd(new Date());
   const overdue = !task.done_at && task.due_date && task.due_date < today;
   const subs = descendants(tasks, task.id);
@@ -112,8 +304,8 @@ export function TaskLine({ task, compact, extra, hideCategory }: { task: Task; c
         {task.due_time ? ` ${task.due_time}` : ''}
       </span>,
     );
-  if (task.priority) meta.push(<span key="p" className={`prio p${task.priority}`}><Icon name="flag" size={12} /> {PRIORITY_LABEL[task.priority]}</span>);
-  if (task.recurrence) meta.push(<span key="r" className="inline-icon"><Icon name="repeat" size={12} /> {task.recurrence}</span>);
+  if (task.priority) meta.push(<span key="p" className={`prio p${Math.min(task.priority, 3)}`}><Icon name="flag" size={12} /> {settings.priorityLabels[task.priority] ?? `P${task.priority}`}</span>);
+  if (task.recurrence) meta.push(<span key="r" className="inline-icon"><Icon name="repeat" size={12} /> {repeatLabel(task.recurrence)}</span>);
   if (subs.length) meta.push(<span key="s">{subs.filter((s) => s.done_at).length}/{subs.length} subtasks</span>);
   return (
     <div className={`task-line${task.done_at ? ' done' : ''}${compact ? ' compact' : ''}`}>

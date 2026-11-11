@@ -8,12 +8,13 @@ export interface Task {
   title: string;
   notes: string;
   category_id: string | null;
-  priority: number; // 0 none, 1 low, 2 med, 3 high
+  area_id: string | null;
+  priority: number; // index into settings.priorityLabels
   due_date: string | null; // YYYY-MM-DD
   due_time: string | null; // HH:MM
   duration_min: number | null;
   scheduled_start: string | null; // ISO — time-block on the calendar
-  recurrence: 'daily' | 'weekdays' | 'weekly' | 'monthly' | null;
+  recurrence: string | null; // daily | weekdays | weekly | monthly | every:N:day|week|month
   parent_id: string | null;
   top3_date: string | null;
   reminder_min: number | null;
@@ -38,7 +39,23 @@ export interface CalEvent {
   all_day: number;
   location: string;
   category_id: string | null;
+  area_id?: string | null;
+  priority?: number;
   reminder_min?: number | null;
+}
+
+export interface Goal {
+  id: string;
+  title: string;
+  notes: string;
+  area_id: string | null;
+  category_id: string | null;
+  priority: number;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // inclusive
+  done_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Source {
@@ -65,6 +82,7 @@ export interface Settings {
   shutdownEnabled: boolean;
   defaultReminderMin: number | null;
   modules: Record<string, boolean>;
+  priorityLabels: string[];
 }
 
 export class ApiError extends Error {

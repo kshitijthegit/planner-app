@@ -1,7 +1,8 @@
 import { all, first, HttpError, json, nowIso, patchRow, readJson, run, str, uuid, type Env } from '../lib/core';
 import type { BackendModule } from './types';
+import { validPriority } from './tasks';
 
-const FIELDS = ['title', 'notes', 'category_id', 'start_at', 'end_at', 'all_day', 'location', 'reminder_min'];
+const FIELDS = ['title', 'notes', 'category_id', 'area_id', 'priority', 'start_at', 'end_at', 'all_day', 'location', 'reminder_min'];
 
 function validate(b: Record<string, unknown>, creating: boolean) {
   if (creating || b.title !== undefined) str(b.title, 'title', { max: 300 });
@@ -9,6 +10,7 @@ function validate(b: Record<string, unknown>, creating: boolean) {
     if (creating && b[k] == null) throw new HttpError(400, `${k} is required`);
     if (b[k] != null && (typeof b[k] !== 'string' || isNaN(Date.parse(b[k] as string)))) throw new HttpError(400, `${k} must be a date`);
   }
+  validPriority(b.priority);
   if (b.start_at && b.end_at && Date.parse(b.end_at as string) < Date.parse(b.start_at as string))
     throw new HttpError(400, 'end must be after start');
 }
@@ -34,7 +36,7 @@ export const eventsModule: BackendModule = {
       const ext = await all(
         env,
         `SELECT e.source_id, e.ext_id, e.series_id, e.title, e.start_at, e.end_at, e.all_day, e.location,
-                COALESCE(o.category_id, s.category_id) AS category_id, s.name AS source_name, s.kind AS source_kind, 'ext' AS kind
+                COALESCE(o.category_id, s.category_id) AS category_id, NULL AS area_id, 0 AS priority, s.name AS source_name, s.kind AS source_kind, 'ext' AS kind
          FROM ext_events e JOIN sources s ON s.id = e.source_id AND s.enabled = 1
          LEFT JOIN ext_overrides o ON o.source_id = e.source_id AND o.series_id = e.series_id
          WHERE e.start_at < ? AND e.end_at > ? ORDER BY e.start_at`,
@@ -51,9 +53,9 @@ export const eventsModule: BackendModule = {
       const now = nowIso();
       await run(
         env,
-        `INSERT INTO events (id, title, notes, category_id, start_at, end_at, all_day, location, reminder_min, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        id, b.title, b.notes ?? '', b.category_id ?? null, b.start_at, b.end_at, b.all_day ? 1 : 0,
+        `INSERT INTO events (id, title, notes, category_id, area_id, priority, start_at, end_at, all_day, location, reminder_min, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, b.title, b.notes ?? '', b.category_id ?? null, b.area_id ?? null, b.priority ?? 0, b.start_at, b.end_at, b.all_day ? 1 : 0,
         b.location ?? '', b.reminder_min ?? null, now, now,
       );
       return json(await getEvent(env, id), 201);

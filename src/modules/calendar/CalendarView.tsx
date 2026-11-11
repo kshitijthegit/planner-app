@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Task } from '../../api';
 import { Icon } from '../../components/Icon';
-import { Dot, Empty } from '../../components/ui';
+import { Empty } from '../../components/ui';
 import { addDays, fmtDuration, sameDay, startOfDay, startOfWeek, ymd } from '../../lib/date';
 import { buildItems } from '../../lib/items';
 import { navigate } from '../../router';
@@ -13,14 +13,14 @@ type View = 'day' | 'week' | 'month';
 
 function loadHidden(): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem('cal-hidden') || '[]'));
+    return new Set(JSON.parse(localStorage.getItem('cal-hidden-areas') || '[]'));
   } catch {
     return new Set();
   }
 }
 
 export function CalendarView() {
-  const { tasks, categories, colorOf, saveTask, openEditor, sources, settings } = useStore();
+  const { tasks, goals, areas, saveTask, openEditor, sources, settings, areaIdOf } = useStore();
   const mobile = useIsMobile();
   const now = useNow();
   const [view, setView] = useState<View>(mobile ? 'day' : 'week');
@@ -41,8 +41,8 @@ export function CalendarView() {
 
   const { events } = useAgenda(from, to);
   const items = useMemo(
-    () => buildItems(events, tasks).filter((i) => !hidden.has(i.categoryId ?? 'none')),
-    [events, tasks, hidden],
+    () => buildItems(events, tasks, goals).filter((i) => !hidden.has(i.areaId ?? areaIdOf({ category_id: i.categoryId }) ?? 'none')),
+    [events, tasks, goals, hidden, areaIdOf],
   );
 
   function toggleCat(id: string) {
@@ -51,7 +51,7 @@ export function CalendarView() {
     else next.add(id);
     setHidden(next);
     try {
-      localStorage.setItem('cal-hidden', JSON.stringify([...next]));
+      localStorage.setItem('cal-hidden-areas', JSON.stringify([...next]));
     } catch {
       /* storage unavailable */
     }
@@ -106,14 +106,14 @@ export function CalendarView() {
             </button>
           ))}
         </div>
-        <div className="filters" role="group" aria-label="Show categories">
-          {categories.map((c) => (
-            <button key={c.id} className={`filter-chip${hidden.has(c.id) ? ' off' : ''}`} aria-pressed={!hidden.has(c.id)} onClick={() => toggleCat(c.id)}>
-              <Dot color={c.color} /> {c.name}
+        <div className="filters" role="group" aria-label="Show areas">
+          {areas.map((a) => (
+            <button key={a.id} className={`filter-chip${hidden.has(a.id) ? ' off' : ''}`} aria-pressed={!hidden.has(a.id)} onClick={() => toggleCat(a.id)}>
+              <span className="area-swatch small" style={{ background: a.color }} aria-hidden="true" /> {a.name}
             </button>
           ))}
-          <button className={`filter-chip${hidden.has('none') ? ' off' : ''}`} aria-pressed={!hidden.has('none')} onClick={() => toggleCat('none')}>
-            <Dot color={colorOf(null)} /> Other
+          <button className="btn-accent new-btn" onClick={() => openEditor({ type: 'event', event: { kind: 'own' } })}>
+            <Icon name="plus" size={16} /> New
           </button>
         </div>
       </header>
@@ -134,7 +134,15 @@ export function CalendarView() {
           {view === 'month' ? (
             <MonthGrid anchor={anchor} items={items} now={now} onPickDay={(d) => { setAnchor(d); setView('day'); }} />
           ) : (
-            <TimeGrid days={days} items={items} now={now} onCreate={newEvent} onDropTask={dropTask} />
+            <TimeGrid
+              days={days}
+              items={items}
+              now={now}
+              onCreate={newEvent}
+              onCreateGoal={(d) => openEditor({ type: 'goal', goal: { start_date: ymd(d), end_date: ymd(d) } })}
+              onDropTask={dropTask}
+              onShowDay={(d) => { setAnchor(d); setView('day'); }}
+            />
           )}
           {!hasSync && (
             <p className="muted small hint">
@@ -152,7 +160,10 @@ export function CalendarView() {
           </section>
         ) : (
           <aside className="tray" aria-label="Task tray">
-            <h2>Task tray</h2>
+            <div className="card-head">
+              <h2>Task tray</h2>
+              <button className="btn-ghost small-btn" onClick={() => openEditor({ type: 'task', task: {} })}><Icon name="plus" size={14} /> Task</button>
+            </div>
             <p className="muted small">Drag a task onto the calendar to time-block it.</p>
             <TaskTray />
           </aside>

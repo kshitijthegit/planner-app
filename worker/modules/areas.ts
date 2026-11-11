@@ -39,6 +39,9 @@ export const areasModule: BackendModule = {
         env.DB.prepare(`UPDATE events SET category_id = NULL WHERE category_id IN (${sub})`).bind(params.id),
         env.DB.prepare(`UPDATE sources SET category_id = NULL WHERE category_id IN (${sub})`).bind(params.id),
         env.DB.prepare(`DELETE FROM ext_overrides WHERE category_id IN (${sub})`).bind(params.id),
+        env.DB.prepare('UPDATE tasks SET area_id = NULL WHERE area_id = ?').bind(params.id),
+        env.DB.prepare('UPDATE events SET area_id = NULL WHERE area_id = ?').bind(params.id),
+        env.DB.prepare('UPDATE goals SET area_id = NULL, category_id = NULL WHERE area_id = ?').bind(params.id),
         env.DB.prepare('DELETE FROM categories WHERE area_id = ?').bind(params.id),
         env.DB.prepare('DELETE FROM areas WHERE id = ?').bind(params.id),
       ]);

@@ -63,6 +63,26 @@ const MIGRATIONS: string[][] = [
     `UPDATE areas SET color = '#E8C46A' WHERE id = 'area-work' AND color = '#E3C567'`,
     `UPDATE areas SET color = '#E8956A' WHERE id = 'area-personal' AND color = '#F29B5B'`,
   ],
+  // v3 — goals, area on tasks/events, event priority; area names/colours per KJ (Personal espresso, University mocha, Work latte).
+  [
+    `ALTER TABLE tasks ADD COLUMN area_id TEXT`,
+    `ALTER TABLE events ADD COLUMN area_id TEXT`,
+    `ALTER TABLE events ADD COLUMN priority INTEGER NOT NULL DEFAULT 0`,
+    `UPDATE tasks SET area_id = (SELECT area_id FROM categories c WHERE c.id = tasks.category_id) WHERE category_id IS NOT NULL`,
+    `UPDATE events SET area_id = (SELECT area_id FROM categories c WHERE c.id = events.category_id) WHERE category_id IS NOT NULL`,
+    `CREATE TABLE goals (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', area_id TEXT, category_id TEXT,
+      priority INTEGER NOT NULL DEFAULT 0, start_date TEXT NOT NULL, end_date TEXT NOT NULL, done_at TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+    `CREATE INDEX idx_goals_dates ON goals (start_date, end_date)`,
+    `UPDATE areas SET name = 'University' WHERE id = 'area-uni' AND name = 'Uni'`,
+    `UPDATE areas SET color = '#3B2618' WHERE id = 'area-personal'`,
+    `UPDATE areas SET color = '#6F4E37' WHERE id = 'area-uni'`,
+    `UPDATE areas SET color = '#C89F72' WHERE id = 'area-work'`,
+    `UPDATE areas SET sort = 0 WHERE id = 'area-personal'`,
+    `UPDATE areas SET sort = 1 WHERE id = 'area-uni'`,
+    `UPDATE areas SET sort = 2 WHERE id = 'area-work'`,
+  ],
 ];
 
 let migratedInIsolate = false;
