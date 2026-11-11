@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "planner",
+  "name": "planner-app",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-01",
   "assets": {
@@ -18,7 +18,7 @@
   ],
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": {
-    "APP_URL": "https://planner.plannerkj.workers.dev",
+    "APP_URL": "https://planner-app.plannerkj.workers.dev",
     "GOOGLE_CLIENT_ID": "282295067160-30tkgjick2phb9pdmbm1agvekr4npl4v.apps.googleusercontent.com"
   },
   // Secrets (set in Cloudflare dashboard, never committed):

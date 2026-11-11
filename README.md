@@ -30,7 +30,7 @@ Both sides are modular. To add a feature:
 2. In **Worker → Settings → Variables and Secrets**, add these as **Secret** type:
    - `GOOGLE_CLIENT_SECRET`: from Google Cloud → Clients → planner-web
    - `ALLOWED_EMAIL`: the only Google account allowed to sign in
-3. Open https://planner.plannerkj.workers.dev and sign in with Google.
+3. Open https://planner-app.plannerkj.workers.dev and sign in with Google.
 
 Every push to `main` redeploys.
 
