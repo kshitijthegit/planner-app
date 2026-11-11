@@ -83,6 +83,13 @@ const MIGRATIONS: string[][] = [
     `UPDATE areas SET sort = 1 WHERE id = 'area-uni'`,
     `UPDATE areas SET sort = 2 WHERE id = 'area-work'`,
   ],
+  // v4 — planned attendance (yes/no/maybe) and recurring events.
+  [
+    `ALTER TABLE events ADD COLUMN attendance TEXT NOT NULL DEFAULT 'yes'`,
+    `ALTER TABLE events ADD COLUMN recurrence TEXT`,
+    `ALTER TABLE events ADD COLUMN recur_until TEXT`,
+    `CREATE TABLE ext_attendance (source_id TEXT NOT NULL, ext_id TEXT NOT NULL, attendance TEXT NOT NULL, PRIMARY KEY (source_id, ext_id))`,
+  ],
 ];
 
 let migratedInIsolate = false;

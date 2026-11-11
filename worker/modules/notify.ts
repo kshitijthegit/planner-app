@@ -5,6 +5,7 @@ import { getSettings, moduleEnabled, type Settings } from '../lib/settings';
 import { addDaysIso, hhmmToMinutes, localParts, zonedToUtc } from '../lib/time';
 import type { BackendModule } from './types';
 import type { TaskRow } from './tasks';
+import { ownEventsBetween } from './events';
 
 /** Atomically claim a notification key so each reminder fires exactly once. */
 async function claim(env: Env, key: string): Promise<boolean> {
@@ -24,16 +25,20 @@ interface CalItem {
 }
 
 export async function dayAgenda(env: Env, date: string, tz: string): Promise<{ timed: CalItem[]; allDay: CalItem[] }> {
-  const start = zonedToUtc(date, '00:00', tz).toISOString();
-  const end = zonedToUtc(addDaysIso(date, 1), '00:00', tz).toISOString();
-  const q = (table: string, extraJoin = '') =>
-    all<CalItem>(
-      env,
-      `SELECT e.title, e.start_at, e.end_at, e.all_day FROM ${table} e ${extraJoin}
-       WHERE (e.all_day = 0 AND e.start_at < ? AND e.end_at > ?) OR (e.all_day = 1 AND e.start_at <= ? AND e.end_at > ?)`,
-      end, start, date, date,
-    );
-  const rows = [...(await q('events')), ...(await q('ext_events', 'JOIN sources s ON s.id = e.source_id AND s.enabled = 1'))];
+  const start = zonedToUtc(date, '00:00', tz);
+  const end = zonedToUtc(addDaysIso(date, 1), '00:00', tz);
+  const own = (await ownEventsBetween(env, start.getTime(), end.getTime(), tz)) as unknown as (CalItem & { attendance?: string })[];
+  const ext = await all<CalItem & { attendance?: string }>(
+    env,
+    `SELECT e.title, e.start_at, e.end_at, e.all_day, COALESCE(a.attendance, 'yes') AS attendance FROM ext_events e
+     JOIN sources s ON s.id = e.source_id AND s.enabled = 1
+     LEFT JOIN ext_attendance a ON a.source_id = e.source_id AND a.ext_id = e.ext_id
+     WHERE (e.all_day = 0 AND e.start_at < ? AND e.end_at > ?) OR (e.all_day = 1 AND e.start_at <= ? AND e.end_at > ?)`,
+    end.toISOString(), start.toISOString(), date, date,
+  );
+  const inDay = (r: CalItem) =>
+    r.all_day ? r.start_at.slice(0, 10) <= date && r.end_at.slice(0, 10) > date : r.start_at < end.toISOString() && r.end_at > start.toISOString();
+  const rows = [...own, ...ext].filter((r) => r.attendance !== 'no' && inDay(r));
   return {
     timed: rows.filter((r) => !r.all_day).sort((a, b) => a.start_at.localeCompare(b.start_at)),
     allDay: rows.filter((r) => r.all_day),
@@ -92,13 +97,11 @@ async function reminders(env: Env, settings: Settings, now: Date) {
   }
 
   // Own events.
-  const evs = await all<{ id: string; title: string; start_at: string; location: string; reminder_min: number }>(
-    env,
-    'SELECT * FROM events WHERE all_day = 0 AND reminder_min IS NOT NULL AND start_at BETWEEN ? AND ?',
-    lo, hi,
-  );
+  const evs = ((await ownEventsBetween(env, nowMs - 60 * 60000, nowMs + 25 * 3600000, tz)) as unknown as {
+    id: string; title: string; start_at: string; location: string; reminder_min: number | null; all_day: number; attendance: string;
+  }[]).filter((e) => !e.all_day && e.reminder_min != null && e.attendance !== 'no');
   for (const e of evs)
-    if (due(e.start_at, e.reminder_min) && (await claim(env, `event:${e.id}:${e.start_at}`)))
+    if (due(e.start_at, e.reminder_min!) && (await claim(env, `event:${e.id}:${e.start_at}`)))
       await sendPush(env, { title: e.title, body: `Starts ${hm(e.start_at, tz)}${e.location ? ` · ${e.location}` : ''}`, url: '/calendar', tag: `event-${e.id}` });
 
   // Synced events use their source's default reminder.
@@ -106,7 +109,8 @@ async function reminders(env: Env, settings: Settings, now: Date) {
     env,
     `SELECT e.source_id, e.ext_id, e.title, e.start_at, e.location, s.reminder_min FROM ext_events e
      JOIN sources s ON s.id = e.source_id AND s.enabled = 1 AND s.reminder_min IS NOT NULL
-     WHERE e.all_day = 0 AND e.start_at BETWEEN ? AND ?`,
+     LEFT JOIN ext_attendance a ON a.source_id = e.source_id AND a.ext_id = e.ext_id
+     WHERE e.all_day = 0 AND e.start_at BETWEEN ? AND ? AND COALESCE(a.attendance, 'yes') != 'no'`,
     lo, hi,
   );
   for (const e of ext)

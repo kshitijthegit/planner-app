@@ -9,6 +9,7 @@ import { isEnabled, MODULES } from './modules/registry';
 import { ShutdownFlow, Top3Picker } from './modules/shutdown/ShutdownFlow';
 import { navigate, usePath } from './router';
 import { loadBoot, StoreProvider, useIsMobile, useStore } from './store';
+import { backgroundForHour, isLightBg, NIGHT_BG, themeVars } from './lib/daytheme';
 
 type Boot = Awaited<ReturnType<typeof loadBoot>>;
 
@@ -83,6 +84,20 @@ function Shell() {
     document.title = current.id === 'today' ? 'Planner' : `${current.title} · Planner`;
   }, [current]);
 
+  // Background follows the clock: re-check every minute, colour changes on the hour.
+  useEffect(() => {
+    const apply = () => {
+      const bg = settings.dayCycle === false ? NIGHT_BG : backgroundForHour(new Date().getHours());
+      const root = document.documentElement;
+      for (const [k, v] of Object.entries(themeVars(bg))) root.style.setProperty(k, v);
+      root.classList.toggle('theme-light', isLightBg(bg));
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
+    };
+    apply();
+    const id = setInterval(apply, 60000);
+    return () => clearInterval(id);
+  }, [settings.dayCycle]);
+
   const nav = (
     <nav aria-label="Main" className={mobile ? 'bottom-nav' : 'rail'}>
       {routed
@@ -143,7 +158,14 @@ function Shell() {
       {editor?.type === 'top3' && <Top3Picker onClose={() => openEditor(null)} />}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className="toast">{t.msg}</div>
+          <div key={t.id} className="toast">
+            <span>{t.msg}</span>
+            {t.action && (
+              <button className="toast-action" onClick={t.action.run}>
+                {t.action.label} <kbd>{navigator.platform.includes('Mac') ? '⌘Z' : 'Ctrl+Z'}</kbd>
+              </button>
+            )}
+          </div>
         ))}
       </div>
     </div>

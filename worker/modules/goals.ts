@@ -1,5 +1,5 @@
 // Goals: things to aim for on a day or across a date range (shown at the top of each day, unfilled).
-import { all, first, HttpError, json, nowIso, patchRow, readJson, run, str, uuid, type Env } from '../lib/core';
+import { all, first, HttpError, json, nowIso, patchRow, readJson, restorableId, run, str, type Env } from '../lib/core';
 import { validPriority } from './tasks';
 import type { BackendModule } from './types';
 
@@ -34,13 +34,13 @@ export const goalsModule: BackendModule = {
     r.post('/api/goals', async ({ env, req }) => {
       const b = await readJson(req);
       validate(b, true);
-      const id = uuid();
+      const id = await restorableId(env, 'goals', b.id);
       const now = nowIso();
       await run(
         env,
-        `INSERT INTO goals (id, title, notes, area_id, category_id, priority, start_date, end_date, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        id, b.title, b.notes ?? '', b.area_id ?? null, b.category_id ?? null, b.priority ?? 0, b.start_date, b.end_date, now, now,
+        `INSERT INTO goals (id, title, notes, area_id, category_id, priority, start_date, end_date, done_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, b.title, b.notes ?? '', b.area_id ?? null, b.category_id ?? null, b.priority ?? 0, b.start_date, b.end_date, b.done_at ?? null, now, now,
       );
       return json(await getGoal(env, id), 201);
     });

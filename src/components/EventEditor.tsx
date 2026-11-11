@@ -1,9 +1,25 @@
 import { useState, type ReactNode } from 'react';
 import type { CalEvent } from '../api';
-import { addDays, fmtDayShort, fmtTime, fromLocalInput, parseYmd, toLocalInput, ymd } from '../lib/date';
+import { addDays, fmtDayShort, fmtTime, parseYmd, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
-import { AreaSelect, CategorySelect, Modal, PrioritySelect, ReminderSelect } from './ui';
+import { DateField, DateTimeField } from './pickers';
+import { AreaSelect, CategorySelect, Modal, PrioritySelect, ReminderSelect, RepeatSelect } from './ui';
+
+type Attendance = 'yes' | 'maybe' | 'no';
+
+export function AttendancePicker({ value, onChange }: { value: Attendance; onChange: (v: Attendance) => void }) {
+  const opts: [Attendance, string][] = [['yes', 'Yes'], ['maybe', 'Maybe'], ['no', 'No']];
+  return (
+    <div className="segmented attendance" role="radiogroup" aria-label="Planned attendance">
+      {opts.map(([v, label]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} className={`${value === v ? 'on' : ''} opt-${v}`} onClick={() => onChange(v)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function EventEditor({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
   if (initial.kind === 'ext') return <ExternalEvent ev={initial as CalEvent} onClose={onClose} />;
@@ -12,17 +28,25 @@ export function EventEditor({ initial, onClose, top }: { initial: Partial<CalEve
 
 function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
   const { saveEvent, removeEvent, settings, areaIdOf } = useStore();
+  // An occurrence of a repeating event edits the whole series, so start from the series' own times.
+  const seriesInitial: Partial<CalEvent> = {
+    ...initial,
+    start_at: initial.series_start_at ?? initial.start_at,
+    end_at: initial.series_end_at ?? initial.end_at,
+  };
   const [e, setE] = useState<Partial<CalEvent>>({
-    all_day: 0, location: '', notes: '', priority: 0, reminder_min: initial.id ? null : settings.defaultReminderMin,
-    ...initial, area_id: initial.area_id ?? areaIdOf(initial),
+    all_day: 0, location: '', notes: '', priority: 0, attendance: 'yes', recurrence: null, recur_until: null,
+    reminder_min: initial.id ? null : settings.defaultReminderMin,
+    ...seriesInitial, area_id: initial.area_id ?? areaIdOf(initial),
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof CalEvent>(k: K, v: CalEvent[K] | null) => setE((x) => ({ ...x, [k]: v }));
   const allDay = !!e.all_day;
+  const repeating = !!initial.recurrence;
 
   function toggleAllDay(on: boolean) {
     if (on) {
-      const s = e.start_at ? new Date(e.start_at) : new Date();
+      const s = e.start_at ? (e.start_at.length === 10 ? parseYmd(e.start_at) : new Date(e.start_at)) : new Date();
       setE((x) => ({ ...x, all_day: 1, start_at: ymd(s), end_at: ymd(addDays(s, 1)) }));
     } else {
       const s = e.start_at ? parseYmd(e.start_at.slice(0, 10)) : new Date();
@@ -33,8 +57,9 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
 
   async function save() {
     if (!e.title?.trim() || !e.start_at || !e.end_at) return;
-    const { source_id: _s, ext_id: _x, series_id: _r, source_name: _n, source_kind: _k, ...own } = e;
-    await saveEvent({ ...own, title: e.title.trim() });
+    const { source_id: _s, ext_id: _x, series_id: _r, source_name: _n, source_kind: _k, series_start_at: _ss, series_end_at: _se, ...own } = e;
+    if (!own.recurrence) own.recur_until = null;
+    await saveEvent({ ...own, title: e.title.trim() }, seriesInitial);
     onClose();
   }
 
@@ -46,7 +71,9 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
         <>
           {e.id &&
             (confirmDelete ? (
-              <button className="btn-danger" onClick={async () => { await removeEvent(e.id!); onClose(); }}>Confirm delete</button>
+              <button className="btn-danger" onClick={async () => { await removeEvent(initial as CalEvent); onClose(); }}>
+                {repeating ? 'Delete every occurrence' : 'Confirm delete'}
+              </button>
             ) : (
               <button className="btn-ghost" onClick={() => setConfirmDelete(true)}><Icon name="trash" size={16} /> Delete</button>
             ))}
@@ -57,6 +84,7 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
       }
     >
       {top}
+      {repeating && e.id && <p className="muted small note">Repeating event: changes apply to every occurrence.</p>}
       <form className="form" onSubmit={(ev) => { ev.preventDefault(); save(); }}>
         <label className="field full">
           <span>Title</span>
@@ -74,45 +102,67 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
           <span>Priority</span>
           <PrioritySelect value={e.priority ?? 0} onChange={(v) => set('priority', v)} />
         </label>
-        <label className="field toggle-row">
+        <div className="field">
+          <span>Planned attendance</span>
+          <AttendancePicker value={(e.attendance ?? 'yes') as Attendance} onChange={(v) => set('attendance', v)} />
+        </div>
+        <label className="field full toggle-row">
           <input type="checkbox" checked={allDay} onChange={(x) => toggleAllDay(x.target.checked)} />
-          <span>All day</span>
+          <span>All day (turns the whole day white on the calendar)</span>
         </label>
         {allDay ? (
           <>
-            <label className="field">
+            <div className="field">
               <span>Start date</span>
-              <input type="date" value={e.start_at ?? ''} onChange={(x) => x.target.value && set('start_at', x.target.value)} />
-            </label>
-            <label className="field">
+              <DateField ariaLabel="Start date" clearable={false} value={e.start_at?.slice(0, 10) ?? null} onChange={(v) => {
+                if (!v) return;
+                const span = e.start_at && e.end_at ? Math.max(1, Math.round((parseYmd(e.end_at).getTime() - parseYmd(e.start_at).getTime()) / 86400000)) : 1;
+                setE((x) => ({ ...x, start_at: v, end_at: ymd(addDays(parseYmd(v), span)) }));
+              }} />
+            </div>
+            <div className="field">
               <span>End date</span>
-              <input
-                type="date"
-                value={e.end_at ? ymd(addDays(parseYmd(e.end_at), -1)) : ''}
-                onChange={(x) => x.target.value && set('end_at', ymd(addDays(parseYmd(x.target.value), 1)))}
+              <DateField
+                ariaLabel="End date"
+                clearable={false}
+                min={e.start_at?.slice(0, 10)}
+                value={e.end_at ? ymd(addDays(parseYmd(e.end_at), -1)) : null}
+                onChange={(v) => v && set('end_at', ymd(addDays(parseYmd(v), 1)))}
               />
-            </label>
+            </div>
           </>
         ) : (
           <>
-            <label className="field">
+            <div className="field">
               <span>Starts</span>
-              <input
-                type="datetime-local"
-                value={e.start_at ? toLocalInput(new Date(e.start_at)) : ''}
-                onChange={(x) => {
-                  if (!x.target.value) return;
-                  const s = fromLocalInput(x.target.value);
+              <DateTimeField
+                label="Start"
+                clearable={false}
+                value={e.start_at ?? null}
+                onChange={(v) => {
+                  if (!v) return;
                   const dur = e.start_at && e.end_at ? Date.parse(e.end_at) - Date.parse(e.start_at) : 3600000;
-                  setE((v) => ({ ...v, start_at: s.toISOString(), end_at: new Date(s.getTime() + Math.max(dur, 0)).toISOString() }));
+                  setE((x) => ({ ...x, start_at: v, end_at: new Date(Date.parse(v) + Math.max(dur, 0)).toISOString() }));
                 }}
               />
-            </label>
-            <label className="field">
+            </div>
+            <div className="field">
               <span>Ends</span>
-              <input type="datetime-local" value={e.end_at ? toLocalInput(new Date(e.end_at)) : ''} onChange={(x) => x.target.value && set('end_at', fromLocalInput(x.target.value).toISOString())} />
-            </label>
+              <DateTimeField label="End" clearable={false} value={e.end_at ?? null} onChange={(v) => v && set('end_at', v)} />
+            </div>
           </>
+        )}
+        <label className="field">
+          <span>Repeat</span>
+          <RepeatSelect value={e.recurrence ?? null} onChange={(v) => set('recurrence', v)} />
+        </label>
+        {e.recurrence ? (
+          <div className="field">
+            <span>Repeat until (optional)</span>
+            <DateField ariaLabel="Repeat until" placeholder="Forever" min={e.start_at?.slice(0, 10)} value={e.recur_until ?? null} onChange={(v) => set('recur_until', v)} />
+          </div>
+        ) : (
+          <span className="field" />
         )}
         <label className="field">
           <span>Location</span>
@@ -133,8 +183,9 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
 }
 
 function ExternalEvent({ ev, onClose }: { ev: CalEvent; onClose: () => void }) {
-  const { setOverride } = useStore();
+  const { setOverride, setExtAttendance } = useStore();
   const [cat, setCat] = useState(ev.category_id);
+  const [att, setAtt] = useState<Attendance>((ev.attendance ?? 'yes') as Attendance);
   const start = ev.all_day ? parseYmd(ev.start_at) : new Date(ev.start_at);
   const end = ev.all_day ? addDays(parseYmd(ev.end_at), -1) : new Date(ev.end_at);
   const when = ev.all_day
@@ -147,14 +198,28 @@ function ExternalEvent({ ev, onClose }: { ev: CalEvent; onClose: () => void }) {
       footer={
         <>
           <span className="grow" />
-          <button className="btn-accent" onClick={async () => { await setOverride(ev.source_id!, ev.series_id!, cat); onClose(); }}>Save</button>
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            className="btn-accent"
+            onClick={async () => {
+              if (cat !== ev.category_id) await setOverride(ev.source_id!, ev.series_id!, cat, ev.category_id);
+              if (att !== (ev.attendance ?? 'yes')) await setExtAttendance(ev.source_id!, ev.ext_id!, att, (ev.attendance ?? 'yes') as Attendance);
+              onClose();
+            }}
+          >
+            Save
+          </button>
         </>
       }
     >
       <div className="form">
         <p className="field full muted">{when}{ev.location ? ` · ${ev.location}` : ''}</p>
-        <p className="field full muted">From {ev.source_name} (read-only — edit it in the original calendar)</p>
-        <label className="field full">
+        <p className="field full muted small">From {ev.source_name}. Read-only: edit the event itself in the original calendar.</p>
+        <div className="field">
+          <span>Planned attendance</span>
+          <AttendancePicker value={att} onChange={setAtt} />
+        </div>
+        <label className="field">
           <span>Sub-category for this event and all its repeats</span>
           <CategorySelect value={cat} onChange={setCat} />
         </label>

@@ -42,6 +42,11 @@ export interface CalEvent {
   area_id?: string | null;
   priority?: number;
   reminder_min?: number | null;
+  attendance?: 'yes' | 'no' | 'maybe';
+  recurrence?: string | null; // own events: daily | weekdays | weekly | monthly | every:N:unit
+  recur_until?: string | null; // YYYY-MM-DD inclusive
+  series_start_at?: string; // set on occurrences of a repeating event
+  series_end_at?: string;
 }
 
 export interface Goal {
@@ -83,6 +88,7 @@ export interface Settings {
   defaultReminderMin: number | null;
   modules: Record<string, boolean>;
   priorityLabels: string[];
+  dayCycle: boolean;
 }
 
 export class ApiError extends Error {

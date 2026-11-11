@@ -23,7 +23,7 @@ export interface Item {
 export function eventToItem(e: CalEvent): Item {
   const allDay = !!e.all_day;
   return {
-    key: e.kind === 'own' ? `own:${e.id}` : `ext:${e.source_id}:${e.ext_id}`,
+    key: e.kind === 'own' ? `own:${e.id}:${e.start_at}` : `ext:${e.source_id}:${e.ext_id}`,
     kind: e.kind,
     title: e.title,
     start: allDay ? parseYmd(e.start_at) : new Date(e.start_at),
@@ -151,4 +151,10 @@ export function textOn(hex: string): string {
 /** A colour usable as text/lines on the dark green background (dark area colours fall back to crema). */
 export function onDark(hex: string): string {
   return textOn(hex) === '#F3EBDD' ? '#EADBC4' : hex;
+}
+
+/** CSS class for an event's planned attendance: no = faint, maybe = dashed outline, yes = normal. */
+export function attClass(it: Item): string {
+  const a = it.event?.attendance;
+  return a === 'no' ? ' att-no' : a === 'maybe' ? ' att-maybe' : '';
 }

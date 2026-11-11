@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { addDays, addMinutes, fmtTime, minutesOfDay, sameDay, startOfDay } from '../../lib/date';
-import { isWholeDay, itemsOnDay, layoutLanes, onDark, textOn, topRowOrder, type Item } from '../../lib/items';
+import { attClass, isWholeDay, itemsOnDay, layoutLanes, onDark, textOn, topRowOrder, type Item } from '../../lib/items';
 import { useStore } from '../../store';
 
 const DAY_MIN = 24 * 60;
@@ -58,7 +58,7 @@ export function TopPill({ item }: { item: Item }) {
       </span>
     );
   return (
-    <button className="pill-event" style={{ background: color, color: textOn(color) }} onClick={open}>
+    <button className={`pill-event${attClass(item)}`} style={{ background: color, color: textOn(color) }} onClick={open}>
       {item.title}
     </button>
   );
@@ -164,7 +164,7 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
                 return (
                   <button
                     key={item.key}
-                    className="tg-block"
+                    className={`tg-block${attClass(item)}`}
                     style={{ top: pct(startMin), height: `max(calc(${pct(durMin)} - 2px), 16px)`, left, width: `calc(${laneW} - 4px)`, background: color, color: textOn(color) }}
                     onClick={() => openEditor({ type: 'event', event: item.event! })}
                   >
@@ -206,7 +206,7 @@ export function MonthGrid({ anchor, items, now, onPickDay }: { anchor: Date; ite
               const c = areaColor(i.areaId ?? areaIdOf({ category_id: i.categoryId }));
               const isEvent = i.kind === 'own' || i.kind === 'ext';
               return (
-                <span key={i.key} className={`month-item ${isEvent ? 'event' : i.kind}${i.done ? ' done' : ''}`}>
+                <span key={i.key} className={`month-item ${isEvent ? 'event' : i.kind}${i.done ? ' done' : ''}${attClass(i)}`}>
                   <span className="month-mark" style={isEvent ? { background: c, borderColor: onDark(c) } : { borderColor: onDark(c) }} aria-hidden="true">
                     {i.kind === 'task' && <Icon name="check" size={8} stroke={3} />}
                   </span>

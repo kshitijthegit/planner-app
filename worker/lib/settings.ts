@@ -12,6 +12,8 @@ export interface Settings {
   modules: Record<string, boolean>;
   /** Priority level names, index = stored value. Users can add levels (max 10). */
   priorityLabels: string[];
+  /** Background follows the time of day (light mint at 6am → phthalo deep at night). */
+  dayCycle: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultReminderMin: 15,
   modules: {},
   priorityLabels: ['None', 'Low', 'Medium', 'High'],
+  dayCycle: true,
 };
 
 export async function getSettings(env: Env): Promise<Settings> {
@@ -47,6 +50,7 @@ export async function saveSettings(env: Env, patch: Partial<Settings>): Promise<
   if (typeof patch.digestTime === 'string' && time.test(patch.digestTime)) next.digestTime = patch.digestTime;
   if (typeof patch.shutdownTime === 'string' && time.test(patch.shutdownTime)) next.shutdownTime = patch.shutdownTime;
   if (typeof patch.digestEnabled === 'boolean') next.digestEnabled = patch.digestEnabled;
+  if (typeof patch.dayCycle === 'boolean') next.dayCycle = patch.dayCycle;
   if (typeof patch.shutdownEnabled === 'boolean') next.shutdownEnabled = patch.shutdownEnabled;
   if (patch.defaultReminderMin === null || typeof patch.defaultReminderMin === 'number')
     next.defaultReminderMin = patch.defaultReminderMin;

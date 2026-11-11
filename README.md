@@ -26,6 +26,11 @@ An installable PWA (Android + Windows) on Cloudflare Workers with D1 storage.
 - Areas are Personal (espresso), University (mocha) and Work (latte). Calendar filters are per area.
 - Adding something is two steps: first pick the area, then fill in the details. Every dropdown can add a new option: area, sub-category, priority level, reminder, duration and repeat (`every:N:day|week|month`).
 - The week and day views fit all 24 hours on screen, with no scrolling.
+- The background changes on the hour. It starts at light mint ink at 06:00 and darkens one shade each hour, reaching phthalo deep by 05:00. Text and surface colours adapt to match (see `src/lib/daytheme.ts`). This can be turned off in Settings → General.
+- Events have a planned attendance: yes, maybe or no. Maybe shows a dashed border and no shows faint. Synced events store attendance in `ext_attendance`.
+- Events can repeat (`recurrence` and `recur_until`, expanded server-side in `worker/lib/recur.ts`). The default is no repeat, and editing one occurrence edits the whole series.
+- Undo: press Ctrl/⌘+Z outside text fields, or use the Undo button on the toast. It covers creating, editing, completing, reopening and deleting tasks, events and goals, plus attendance and sub-category changes.
+- Themed date and time pickers (`src/components/pickers.tsx`) replace the browser's own pop-ups.
 - Migration v2 wiped all calendar data once (Nov 2026). Linked calendars stayed listed, with sync switched off.
 
 ## Modules

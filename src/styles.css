@@ -556,3 +556,71 @@ select { appearance: auto; }
 .calendar.mobile .tg.multi .tg-block-time { display: none; }
 .calendar.mobile .tg.multi .tg-block-title { font-size: 10px; }
 .tg-block-title, .tg-block-time { flex: none; }
+
+/* ---------- Day cycle: smooth hourly colour change ---------- */
+body, .rail, .bottom-nav, .card, .modal, .tray-sheet { transition: background-color 1.2s ease, color 1.2s ease, border-color 1.2s ease; }
+.tg-task { background: var(--surface); }
+.whole .pill-goal, .whole .pill-task, .tg-col.whole .tg-task { color: #2B1D14; }
+
+/* ---------- Attendance ---------- */
+.att-no { opacity: 0.3; }
+.att-no:hover, .att-no:focus-visible { opacity: 0.7; }
+.att-maybe { outline: 2px dashed currentColor; outline-offset: -3px; }
+.tl-card.att-maybe { outline: 2px dashed var(--border-2); outline-offset: -2px; }
+.month-item.att-no { opacity: 0.35; }
+.month-item.att-maybe .month-mark { border-style: dashed; background: transparent !important; }
+.segmented.attendance { align-self: flex-start; }
+.segmented.attendance button { min-width: 64px; }
+.segmented.attendance .opt-no.on { background: var(--surface-2); color: var(--muted); }
+.segmented.attendance .opt-maybe.on { outline: 2px dashed var(--text); outline-offset: -3px; }
+.note { margin: 0 0 10px; }
+
+/* ---------- Undo toast ---------- */
+.toast { display: flex; align-items: center; gap: 14px; pointer-events: auto; }
+.toast-action { background: none; border: none; color: var(--accent); font-weight: 700; padding: 6px 0; display: inline-flex; gap: 6px; align-items: center; }
+.toast-action kbd { font: inherit; font-size: 10px; font-weight: 500; color: var(--muted); border: 1px solid var(--border-2); border-radius: 4px; padding: 0 4px; }
+.shell.mobile .toast-action kbd { display: none; }
+
+/* ---------- Themed date/time pickers ---------- */
+.picker-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; width: 100%;
+  border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface); color: var(--text); text-align: left; font-size: 14px;
+}
+.picker-btn.empty span { color: var(--muted); }
+.picker-btn svg { color: var(--accent); flex: none; }
+.picker-btn.compact { width: auto; min-height: 34px; padding: 0 8px; font-size: 12px; gap: 5px; flex: none; }
+.picker-btn[aria-expanded='true'] { border-color: var(--accent); }
+.dt-field { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 6px; }
+.picker-pop {
+  position: fixed; z-index: 80; background: var(--surface); color: var(--text); border: 1px solid var(--border-2);
+  border-radius: 16px; box-shadow: 0 18px 48px #0007; padding: 12px;
+}
+.cal-pop { width: 280px; display: flex; flex-direction: column; gap: 8px; }
+.cal-pop-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-pop-head strong { font-family: var(--serif); font-size: 16px; }
+.cal-pop-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-pop-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; }
+.cal-pop-day {
+  aspect-ratio: 1; min-height: 34px; border: none; border-radius: 10px; background: transparent; color: var(--text); font-size: 13px;
+  display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
+}
+.cal-pop-day:hover { background: var(--surface-2); }
+.cal-pop-day.other { color: var(--muted); opacity: 0.55; }
+.cal-pop-day.today { box-shadow: inset 0 0 0 1.5px var(--now); font-weight: 700; }
+.cal-pop-day.on { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.cal-pop-day:disabled { opacity: 0.25; cursor: default; }
+.cal-pop-foot { display: flex; align-items: center; gap: 14px; border-top: 1px solid var(--border); padding-top: 6px; }
+.muted-link { color: var(--muted); }
+.time-pop { width: 200px; display: flex; flex-direction: column; gap: 8px; }
+.time-pop-type input { min-height: 38px; font-size: 13px; }
+.time-pop-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.time-pop-item { min-height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--text); text-align: left; padding: 0 10px; font-variant-numeric: tabular-nums; flex: none; }
+.time-pop-item:hover { background: var(--surface-2); }
+.time-pop-item.on { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+/* Light (morning) shades: darken pastel sub-category text so it stays readable on mint. */
+.theme-light .cat-label, .theme-light .eyebrow[style], .theme-light .chip[style], .theme-light h3.eyebrow { filter: brightness(0.45) saturate(1.6); }
+.theme-light .grip { color: #5d7d70; }
+.theme-light .check { border-color: #46685a; }
+.theme-light .tg-block, .theme-light .pill-event { box-shadow: inset 0 0 0 1px #0e2a1f22; }
+
+.picker-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

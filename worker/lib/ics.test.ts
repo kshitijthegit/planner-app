@@ -109,3 +109,22 @@ describe('custom recurrence', () => {
     expect(nextDue('2026-11-13', 'weekdays')).toBe('2026-11-16');
   });
 });
+
+import { occurrences } from './recur';
+describe('recurring events', () => {
+  const from = Date.parse('2026-11-01T00:00:00Z');
+  const to = Date.parse('2026-12-01T00:00:00Z');
+  it('expands a weekly timed event keeping local wall time', () => {
+    const occ = occurrences({ start_at: '2026-11-04T07:00:00.000Z', end_at: '2026-11-04T09:00:00.000Z', all_day: 0, recurrence: 'weekly', recur_until: '2026-11-25' }, from, to, 'Asia/Singapore');
+    expect(occ.map((o) => o.start_at)).toEqual(['2026-11-04T07:00:00.000Z', '2026-11-11T07:00:00.000Z', '2026-11-18T07:00:00.000Z', '2026-11-25T07:00:00.000Z']);
+    expect(occ[1].end_at).toBe('2026-11-11T09:00:00.000Z');
+  });
+  it('keeps 09:00 local across a DST change', () => {
+    const occ = occurrences({ start_at: '2026-10-20T08:00:00.000Z', end_at: '2026-10-20T09:00:00.000Z', all_day: 0, recurrence: 'weekly', recur_until: null }, Date.parse('2026-10-19T00:00:00Z'), Date.parse('2026-11-05T00:00:00Z'), 'Europe/London');
+    expect(occ.map((o) => o.start_at)).toEqual(['2026-10-20T08:00:00.000Z', '2026-10-27T09:00:00.000Z', '2026-11-03T09:00:00.000Z']);
+  });
+  it('expands all-day events and respects the window', () => {
+    const occ = occurrences({ start_at: '2026-11-02', end_at: '2026-11-03', all_day: 1, recurrence: 'every:2:week', recur_until: null }, Date.parse('2026-11-10T00:00:00Z'), to, 'Asia/Singapore');
+    expect(occ.map((o) => o.start_at)).toEqual(['2026-11-16', '2026-11-30']);
+  });
+});

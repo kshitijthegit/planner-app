@@ -4,7 +4,7 @@ import { Icon } from '../../components/Icon';
 import { QuickAdd } from '../../components/QuickAdd';
 import { Check, Dot, Empty, TaskLine, TaskTree } from '../../components/ui';
 import { addDays, fmtDayLong, fmtDuration, fmtTime, greeting, parseYmd, startOfDay, ymd } from '../../lib/date';
-import { buildItems, itemsOnDay, topRowOrder, type Item } from '../../lib/items';
+import { attClass, buildItems, itemsOnDay, topRowOrder, type Item } from '../../lib/items';
 import { TopPill } from '../calendar/TimeGrid';
 import { navigate } from '../../router';
 import { useAgenda, useIsMobile, useStore } from '../../store';
@@ -219,12 +219,13 @@ function TimelineItem({ item }: { item: Item }) {
   }
   const e = item.event!;
   const src = e.kind === 'ext' ? ` · ${e.source_name}` : '';
+  const att = e.attendance === 'no' ? ' · Not attending' : e.attendance === 'maybe' ? ' · Maybe' : '';
   return (
-    <div className="tl-card">
+    <div className={`tl-card${attClass(item)}`}>
       <span className="tl-bar" style={{ background: color }} />
       <button className="tl-body" onClick={() => openEditor({ type: 'event', event: e })}>
         <span className="tl-title">{item.title}</span>
-        <span className="tl-sub">{labelOf(item.categoryId)}{src} · {range}{e.location ? ` · ${e.location}` : ''}</span>
+        <span className="tl-sub">{labelOf(item.categoryId)}{src} · {range}{e.location ? ` · ${e.location}` : ''}{att}</span>
       </button>
     </div>
   );

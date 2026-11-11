@@ -160,3 +160,14 @@ export function str(v: unknown, field: string, opts: { max?: number; optional?: 
   if (opts.max && v.length > opts.max) throw new HttpError(400, `${field} is too long`);
   return v;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** New row id; reuses a client-supplied id when restoring a deleted row (undo), if it is a free UUID. */
+export async function restorableId(env: Env, table: 'tasks' | 'events' | 'goals', requested: unknown): Promise<string> {
+  if (typeof requested === 'string' && UUID.test(requested)) {
+    const taken = await first(env, `SELECT id FROM ${table} WHERE id = ?`, requested);
+    if (!taken) return requested;
+  }
+  return uuid();
+}

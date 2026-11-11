@@ -8,6 +8,10 @@
 - Items: events are filled blocks, tasks are thin blocks with a check, and goals are unfilled blocks at the top of the day. Untimed items go to the top of the day, and an all-day event makes the whole day white.
 - New items go through `AddFlow` (area first, then details). Dropdowns use `CreatableSelect`, so each can add a new option.
 - Calendar grid shows 24 hours with no scrolling; positions are percentages of the column height.
+- The background follows the time of day (`src/lib/daytheme.ts` sets CSS variables hourly and adds `.theme-light` on light shades). Never hard-code text or surface colours; use the variables.
+- Events: attendance (yes/maybe/no → normal/dashed/faint) and recurrence, which is expanded server-side; an occurrence edits the whole series.
+- Undo: every store mutation pushes an inverse operation (`pushUndo`), triggered by Ctrl/⌘+Z or the toast button. POST accepts `id` so deleted rows can be restored.
+- Date and time entry uses `pickers.tsx` (DateField / TimeField / DateTimeField), never native date inputs.
 - GUI: Today page = home (Top 3, timeline, quick add, shutdown card). Calendar = day/week/month with a drag-to-time-block task tray.
 - Areas → Categories (2 levels) colour every task and event. Synced events get a category per source, overridable per series.
 - Calendar sync is read-only (Google + ICS). Work Outlook is out of scope for now.

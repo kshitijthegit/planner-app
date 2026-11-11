@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { Task } from '../api';
-import { fromLocalInput, toLocalInput, ymd } from '../lib/date';
+import { ymd } from '../lib/date';
+import { DateField, DateTimeField, TimeField } from './pickers';
 import { useStore } from '../store';
 import { Icon } from './Icon';
 import { AreaSelect, CategorySelect, childrenOf, depthOf, DurationSelect, MAX_SUBTASK_DEPTH, Modal, PrioritySelect, ReminderSelect, RepeatSelect, TaskLine } from './ui';
@@ -78,22 +79,18 @@ export function TaskEditor({ initial, onClose, top }: { initial: Partial<Task>; 
           <span>Priority</span>
           <PrioritySelect value={t.priority ?? 0} onChange={(v) => set('priority', v)} />
         </label>
-        <label className="field">
+        <div className="field">
           <span>Due date</span>
-          <input type="date" value={t.due_date ?? ''} onChange={(e) => set('due_date', e.target.value || null)} />
-        </label>
-        <label className="field">
+          <DateField ariaLabel="Due date" placeholder="No due date" value={t.due_date ?? null} onChange={(v) => set('due_date', v)} />
+        </div>
+        <div className="field">
           <span>Due time</span>
-          <input type="time" value={t.due_time ?? ''} onChange={(e) => set('due_time', e.target.value || null)} />
-        </label>
-        <label className="field">
+          <TimeField ariaLabel="Due time" placeholder="No time" value={t.due_time ?? null} onChange={(v) => set('due_time', v)} />
+        </div>
+        <div className="field">
           <span>Time block (calendar)</span>
-          <input
-            type="datetime-local"
-            value={t.scheduled_start ? toLocalInput(new Date(t.scheduled_start)) : ''}
-            onChange={(e) => set('scheduled_start', e.target.value ? fromLocalInput(e.target.value).toISOString() : null)}
-          />
-        </label>
+          <DateTimeField label="Time block" value={t.scheduled_start ?? null} onChange={(v) => set('scheduled_start', v)} />
+        </div>
         <label className="field">
           <span>Duration</span>
           <DurationSelect value={t.duration_min ?? null} onChange={(v) => set('duration_min', v)} />
@@ -130,8 +127,7 @@ export function TaskEditor({ initial, onClose, top }: { initial: Partial<Task>; 
           <form onSubmit={addSub} className="qa-row sub-add">
             <label htmlFor="sub-add" className="sr-only">Subtask title</label>
             <input id="sub-add" value={sub} onChange={(e) => setSub(e.target.value)} placeholder="Add subtask" />
-            <label htmlFor="sub-due" className="sr-only">Subtask deadline</label>
-            <input id="sub-due" type="date" value={subDue} onChange={(e) => setSubDue(e.target.value)} className="date-mini" />
+            <DateField id="sub-due" compact ariaLabel="Subtask deadline" placeholder="Deadline" value={subDue || null} onChange={(v) => setSubDue(v ?? '')} />
             <button className="btn-ghost icon-only" aria-label="Add subtask" disabled={!sub.trim()}><Icon name="plus" /></button>
           </form>
           {!t.id && pending.length > 0 && <p className="muted small">Subtasks are created when you save.</p>}
@@ -152,8 +148,7 @@ function SubtaskRow({ task, level }: { task: Task; level: number }) {
         hideCategory
         extra={
           <>
-            <label htmlFor={`due-${task.id}`} className="sr-only">Deadline for {task.title}</label>
-            <input id={`due-${task.id}`} type="date" className="date-mini" value={task.due_date ?? ''} onChange={(e) => saveTask({ id: task.id, due_date: e.target.value || null })} />
+            <DateField id={`due-${task.id}`} compact ariaLabel={`Deadline for ${task.title}`} placeholder="Deadline" value={task.due_date ?? null} onChange={(v) => saveTask({ id: task.id, due_date: v })} />
           </>
         }
       />

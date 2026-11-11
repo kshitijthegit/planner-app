@@ -5,6 +5,7 @@ import { ReminderSelect } from '../../components/ui';
 import { disablePush, enablePush, pushStatus } from '../../lib/push';
 import { useStore } from '../../store';
 import { navigate } from '../../router';
+import { TimeField } from '../../components/pickers';
 import { MODULES } from '../registry';
 
 
@@ -37,6 +38,13 @@ export function SettingsView() {
       </section>
       <section className="card settings-card">
         <h2>General</h2>
+        <label className="toggle-row">
+          <input type="checkbox" checked={settings.dayCycle !== false} onChange={(e) => updateSettings({ dayCycle: e.target.checked })} />
+          <span>
+            <strong>Background follows the time of day</strong>{' '}
+            <span className="muted small">— light mint from 6am, a shade darker each hour, phthalo deep at night</span>
+          </span>
+        </label>
         <div className="form">
           <label className="field">
             <span>Name in greetings</span>
@@ -99,18 +107,18 @@ function Notifications() {
           <input type="checkbox" checked={settings.digestEnabled} onChange={(e) => updateSettings({ digestEnabled: e.target.checked })} />
           <span>Morning digest</span>
         </label>
-        <label className="field">
+        <div className="field">
           <span>Digest time</span>
-          <input type="time" value={settings.digestTime} onChange={(e) => e.target.value && updateSettings({ digestTime: e.target.value })} />
-        </label>
+          <TimeField ariaLabel="Digest time" clearable={false} value={settings.digestTime} onChange={(v) => v && updateSettings({ digestTime: v })} />
+        </div>
         <label className="field toggle-row">
           <input type="checkbox" checked={settings.shutdownEnabled} onChange={(e) => updateSettings({ shutdownEnabled: e.target.checked })} />
           <span>Evening shutdown reminder</span>
         </label>
-        <label className="field">
+        <div className="field">
           <span>Shutdown time</span>
-          <input type="time" value={settings.shutdownTime} onChange={(e) => e.target.value && updateSettings({ shutdownTime: e.target.value })} />
-        </label>
+          <TimeField ariaLabel="Shutdown time" clearable={false} value={settings.shutdownTime} onChange={(v) => v && updateSettings({ shutdownTime: v })} />
+        </div>
         <label className="field">
           <span>Default reminder for new timed tasks/events</span>
           <ReminderSelect value={settings.defaultReminderMin} onChange={(v) => updateSettings({ defaultReminderMin: v })} />

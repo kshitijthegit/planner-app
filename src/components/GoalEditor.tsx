@@ -4,6 +4,7 @@ import { ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
 import { AreaSelect, CategorySelect, Modal, PrioritySelect } from './ui';
+import { DateField } from './pickers';
 
 export function GoalEditor({ initial, onClose, top }: { initial: Partial<Goal>; onClose: () => void; top?: ReactNode }) {
   const { saveGoal, removeGoal } = useStore();
@@ -56,14 +57,14 @@ export function GoalEditor({ initial, onClose, top }: { initial: Partial<Goal>; 
           <PrioritySelect value={g.priority ?? 0} onChange={(v) => set('priority', v)} />
         </label>
         <span className="field" />
-        <label className="field">
+        <div className="field">
           <span>From</span>
-          <input type="date" value={g.start_date ?? ''} onChange={(e) => e.target.value && set('start_date', e.target.value)} />
-        </label>
-        <label className="field">
+          <DateField ariaLabel="Goal start" clearable={false} value={g.start_date ?? null} onChange={(v) => v && setG((x) => ({ ...x, start_date: v, end_date: x.end_date && x.end_date >= v ? x.end_date : v }))} />
+        </div>
+        <div className="field">
           <span>Until (same day = one-day goal)</span>
-          <input type="date" value={g.end_date ?? ''} min={g.start_date} onChange={(e) => e.target.value && set('end_date', e.target.value)} />
-        </label>
+          <DateField ariaLabel="Goal end" clearable={false} min={g.start_date} value={g.end_date ?? null} onChange={(v) => v && set('end_date', v)} />
+        </div>
         {g.id && (
           <label className="field full toggle-row">
             <input type="checkbox" checked={!!g.done_at} onChange={(e) => set('done_at', e.target.checked ? new Date().toISOString() : null)} />
