@@ -31,7 +31,7 @@ async function tokenRequest(env: Env, body: Record<string, string>) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, ...body }),
+    body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: (env.GOOGLE_CLIENT_SECRET || '').trim().replace(/^["']|["']$/g, ''), ...body }),
   });
   const data = (await res.json()) as Record<string, unknown>;
   if (!res.ok) throw new HttpError(502, `Google token error: ${data.error_description || data.error || res.status}`);
