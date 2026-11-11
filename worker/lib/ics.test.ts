@@ -91,3 +91,11 @@ describe('time helpers', () => {
     expect(zonedToUtc('2026-12-01', '09:00', 'Europe/London').toISOString()).toBe('2026-12-01T09:00:00.000Z');
   });
 });
+
+import { normalizeEmail } from './google';
+describe('normalizeEmail', () => {
+  it('ignores case, quotes, spaces, gmail dots and +tags', () => {
+    expect(normalizeEmail(' "First.Last+planner@Gmail.com" ')).toBe('firstlast@gmail.com');
+    expect(normalizeEmail('a.b@uni.edu.sg')).toBe('a.b@uni.edu.sg');
+  });
+});

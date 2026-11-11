@@ -9,6 +9,15 @@ interface GoogleTokens {
   expires_at?: number; // epoch ms
 }
 
+/** Lower-case, strip quotes/spaces; for Gmail ignore dots and +tags (Google treats them as the same inbox). */
+export function normalizeEmail(raw: string): string {
+  const e = raw.trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
+  const [local, domain] = e.split('@');
+  if (!domain) return e;
+  if (domain === 'gmail.com' || domain === 'googlemail.com') return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+  return e;
+}
+
 export function redirectUri(env: Env): string {
   return `${env.APP_URL}/api/auth/google/callback`;
 }
@@ -48,8 +57,10 @@ export async function exchangeCode(env: Env, code: string): Promise<string> {
     email_verified?: boolean;
   };
   if (!payload.email || !payload.email_verified) throw new HttpError(403, 'Google account email not verified');
-  const allowed = (env.ALLOWED_EMAIL || '').trim().toLowerCase();
-  if (!allowed || payload.email.toLowerCase() !== allowed) throw new HttpError(403, 'This account is not allowed');
+  const allowed = normalizeEmail(env.ALLOWED_EMAIL || '');
+  if (!allowed) throw new HttpError(403, 'ALLOWED_EMAIL secret is not set in Cloudflare');
+  if (normalizeEmail(payload.email) !== allowed)
+    throw new HttpError(403, `Signed in as ${payload.email}, which doesn't match ALLOWED_EMAIL`);
   const prev = (await kvGet<GoogleTokens>(env, 'google_tokens')) ?? {};
   await kvSet(env, 'google_tokens', {
     refresh_token: data.refresh_token ?? prev.refresh_token,
