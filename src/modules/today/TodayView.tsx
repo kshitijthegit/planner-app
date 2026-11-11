@@ -1,0 +1,240 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { Task } from '../../api';
+import { Icon } from '../../components/Icon';
+import { QuickAdd } from '../../components/QuickAdd';
+import { Check, Dot, Empty, TaskLine } from '../../components/ui';
+import { addDays, fmtDayLong, fmtDuration, fmtTime, greeting, parseYmd, startOfDay, ymd } from '../../lib/date';
+import { buildItems, itemsOnDay, type Item } from '../../lib/items';
+import { navigate } from '../../router';
+import { useAgenda, useIsMobile, useStore } from '../../store';
+import { isEnabled } from '../registry';
+
+export function useNow(intervalMs = 60000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+interface Row {
+  key: string;
+  at: Date;
+  node: ReactNode;
+}
+
+export function TodayView() {
+  const { tasks, settings, openEditor, colorOf, labelOf, completeTask, reopenTask } = useStore();
+  const mobile = useIsMobile();
+  const now = useNow();
+  const dayStart = useMemo(() => startOfDay(now), [ymd(now)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const today = ymd(dayStart);
+  const { events } = useAgenda(dayStart, addDays(dayStart, 1));
+
+  const items = useMemo(() => itemsOnDay(buildItems(events, tasks), dayStart), [events, tasks, dayStart]);
+  const allDay = items.filter((i) => i.allDay);
+  const timed = items.filter((i) => !i.allDay);
+  const roots = tasks.filter((t) => !t.parent_id);
+  const open = roots.filter((t) => !t.done_at);
+  const overdue = open.filter((t) => t.due_date && t.due_date < today);
+  const dueToday = open.filter((t) => t.due_date === today);
+  const top3 = roots.filter((t) => t.top3_date === today).slice(0, 3);
+  const eventCount = items.filter((i) => i.kind !== 'task').length;
+
+  const dueMarkers = open.filter((t) => t.due_date === today && t.due_time && !t.scheduled_start);
+  const unscheduled = open
+    .filter((t) => !t.scheduled_start && (!t.due_date || t.due_date <= today) && t.top3_date !== today)
+    .sort((a, b) => Number(!!b.due_date && b.due_date < today) - Number(!!a.due_date && a.due_date < today) || b.priority - a.priority);
+
+  // Timeline rows: events + time blocks + due-time markers, with a "now" line.
+  const rows: Row[] = [
+    ...timed.map((it) => ({ key: it.key, at: it.start, node: <TimelineItem item={it} /> })),
+    ...dueMarkers.map((t) => {
+      const [h, m] = t.due_time!.split(':').map(Number);
+      const at = new Date(dayStart);
+      at.setHours(h, m);
+      return {
+        key: `due:${t.id}`,
+        at,
+        node: (
+          <div className="tl-card due">
+            <span className="tl-bar" style={{ background: colorOf(t.category_id) }} />
+            <Check checked={false} label={`Complete ${t.title}`} onChange={() => completeTask(t.id)} />
+            <button className="tl-body" onClick={() => openEditor({ type: 'task', task: t })}>
+              <span className="tl-title">{t.title}</span>
+              <span className="tl-sub">Due {t.due_time} · {labelOf(t.category_id)}</span>
+            </button>
+          </div>
+        ),
+      };
+    }),
+  ].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const nowIdx = rows.findIndex((r) => r.at > now);
+
+  const counts = [
+    `${eventCount} event${eventCount === 1 ? '' : 's'}`,
+    `${dueToday.length} due today`,
+    overdue.length ? `${overdue.length} overdue` : null,
+  ].filter(Boolean);
+
+  const top3Section = (
+    <section aria-labelledby="top3-h" className="section">
+      <div className="section-head">
+        <h2 id="top3-h" className="eyebrow">Top 3 today</h2>
+        <button className="link-btn" onClick={() => openEditor({ type: 'top3' })}>Choose</button>
+      </div>
+      <div className={mobile ? 'top3-list' : 'top3-grid'}>
+        {top3.map((t) =>
+          mobile ? (
+            <TaskLine key={t.id} task={t} compact />
+          ) : (
+            <div key={t.id} className={`top3-card${t.done_at ? ' done' : ''}`}>
+              <div className="top3-row">
+                <span className="cat-label" style={{ color: colorOf(t.category_id) }}>{labelOf(t.category_id)}</span>
+                <Check checked={!!t.done_at} label={`Complete ${t.title}`} onChange={(v) => (v ? completeTask(t.id) : reopenTask(t.id))} />
+              </div>
+              <button className="top3-title" onClick={() => openEditor({ type: 'task', task: t })}>{t.title}</button>
+              <span className="muted small">{taskSub(t, today)}</span>
+            </div>
+          ),
+        )}
+        {Array.from({ length: 3 - top3.length }).map((_, i) => (
+          <button key={`empty-${i}`} className="top3-empty" onClick={() => openEditor({ type: 'top3' })}>
+            <Icon name="plus" size={16} /> Pick a priority
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+
+  const timeline = (
+    <section aria-labelledby="tl-h" className="section">
+      <h2 id="tl-h" className="eyebrow">Timeline</h2>
+      {allDay.length > 0 && (
+        <div className="allday-row">
+          {allDay.map((it) => (
+            <button key={it.key} className="chip" onClick={() => it.event && openEditor({ type: 'event', event: it.event })}>
+              <Dot color={colorOf(it.categoryId)} /> {it.title}
+            </button>
+          ))}
+        </div>
+      )}
+      {rows.length === 0 && <Empty>Nothing scheduled. Drag tasks onto the calendar to time-block them.</Empty>}
+      <ol className="timeline">
+        {rows.map((r, i) => (
+          <li key={r.key}>
+            {i === nowIdx && <NowLine now={now} />}
+            <div className="tl-row">
+              <span className="tl-time">{fmtTime(r.at)}</span>
+              {r.node}
+            </div>
+          </li>
+        ))}
+        {rows.length > 0 && nowIdx === -1 && (
+          <li>
+            <NowLine now={now} />
+          </li>
+        )}
+      </ol>
+    </section>
+  );
+
+  const side = (
+    <>
+      {!mobile && (
+        <section className="section">
+          <h2 className="eyebrow">Quick add</h2>
+          <QuickAdd extra={{ due_date: null }} />
+        </section>
+      )}
+      <section aria-labelledby="un-h" className="section">
+        <div className="section-head">
+          <h2 id="un-h" className="eyebrow">To do · not scheduled</h2>
+          <button className="link-btn" onClick={() => navigate('/tasks')}>All tasks</button>
+        </div>
+        {unscheduled.length === 0 && <Empty>All clear.</Empty>}
+        <div className="list">
+          {unscheduled.slice(0, 12).map((t) => <TaskLine key={t.id} task={t} />)}
+        </div>
+      </section>
+      {isEnabled(settings.modules, 'shutdown') && (
+        <section className="card shutdown-card">
+          <span className="muted small">Tonight, {settings.shutdownTime}</span>
+          <strong>Evening shutdown</strong>
+          <span className="muted small">Close out today and pick tomorrow’s top 3.</span>
+          <button className="btn-ghost" onClick={() => openEditor({ type: 'shutdown' })}>
+            <Icon name="moon" size={16} /> Start now
+          </button>
+        </section>
+      )}
+    </>
+  );
+
+  return (
+    <div className="today-page">
+      <div className="today-main">
+        <header className="page-head">
+          <p className="muted">{greeting(now)}, {settings.displayName}</p>
+          <h1>{fmtDayLong(now)}</h1>
+          <p className="muted">{counts.join(' · ')}</p>
+        </header>
+        {top3Section}
+        {timeline}
+        {mobile && side}
+      </div>
+      {!mobile && <aside className="today-side">{side}</aside>}
+      {mobile && (
+        <div className="mobile-qa">
+          <QuickAdd id="quick-add-m" compact />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function taskSub(t: Task, today: string): string {
+  const parts: string[] = [];
+  if (t.due_date) parts.push(t.due_date < today ? 'Overdue' : t.due_date === today ? 'Due today' : `Due ${parseYmd(t.due_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`);
+  if (t.duration_min) parts.push(`~${fmtDuration(t.duration_min)}`);
+  return parts.join(' · ') || ' ';
+}
+
+function NowLine({ now }: { now: Date }) {
+  return (
+    <div className="now-line" aria-label={`Now, ${fmtTime(now)}`}>
+      <span className="tl-time">{fmtTime(now)}</span>
+      <span className="now-bar" />
+    </div>
+  );
+}
+
+function TimelineItem({ item }: { item: Item }) {
+  const { colorOf, labelOf, openEditor, completeTask, reopenTask } = useStore();
+  const color = colorOf(item.categoryId);
+  const range = `${fmtTime(item.start)}–${fmtTime(item.end)}`;
+  if (item.kind === 'task') {
+    const t = item.task!;
+    return (
+      <div className={`tl-card block${t.done_at ? ' done' : ''}`} style={{ borderColor: color }}>
+        <span className="tl-bar" style={{ background: color }} />
+        <Check checked={!!t.done_at} label={`Complete ${t.title}`} onChange={(v) => (v ? completeTask(t.id) : reopenTask(t.id))} />
+        <button className="tl-body" onClick={() => openEditor({ type: 'task', task: t })}>
+          <span className="tl-title">{t.title}</span>
+          <span className="tl-sub">Time block · {range}</span>
+        </button>
+      </div>
+    );
+  }
+  const e = item.event!;
+  const src = e.kind === 'ext' ? ` · ${e.source_name}` : '';
+  return (
+    <div className="tl-card">
+      <span className="tl-bar" style={{ background: color }} />
+      <button className="tl-body" onClick={() => openEditor({ type: 'event', event: e })}>
+        <span className="tl-title">{item.title}</span>
+        <span className="tl-sub">{labelOf(item.categoryId)}{src} · {range}{e.location ? ` · ${e.location}` : ''}</span>
+      </button>
+    </div>
+  );
+}

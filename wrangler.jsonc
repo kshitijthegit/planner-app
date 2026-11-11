@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "planner",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "planner-db",
+      "database_id": "6bfd781d-d7c1-499b-8b6c-a20f7faf4c46"
+    }
+  ],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "APP_URL": "https://planner.plannerkj.workers.dev",
+    "GOOGLE_CLIENT_ID": "282295067160-30tkgjick2phb9pdmbm1agvekr4npl4v.apps.googleusercontent.com"
+  },
+  // Secrets (set in Cloudflare dashboard, never committed):
+  //   GOOGLE_CLIENT_SECRET, ALLOWED_EMAIL
+  "observability": { "enabled": true }
+}

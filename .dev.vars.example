@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local `wrangler dev` (never commit .dev.vars)
+GOOGLE_CLIENT_SECRET=
+ALLOWED_EMAIL=
+APP_URL=http://localhost:8787
