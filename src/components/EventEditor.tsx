@@ -3,6 +3,7 @@ import type { CalEvent } from '../api';
 import { addDays, fmtDayShort, fmtTime, parseYmd, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
+import { NotesEditor } from './NotesEditor';
 import { DateField, DateTimeField } from './pickers';
 import { AreaSelect, CategorySelect, Modal, PrioritySelect, ReminderSelect, RepeatSelect } from './ui';
 
@@ -21,28 +22,69 @@ export function AttendancePicker({ value, onChange }: { value: Attendance; onCha
   );
 }
 
-export function EventEditor({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
-  if (initial.kind === 'ext') return <ExternalEvent ev={initial as CalEvent} onClose={onClose} />;
-  return <OwnEvent initial={initial} onClose={onClose} top={top} />;
+export type Scope = 'one' | 'all';
+
+/** "Only this one / Every occurrence" switch for repeating events and goals. */
+export function ScopeSwitch({ scope, onChange, occLabel }: { scope: Scope; onChange: (s: Scope) => void; occLabel: string }) {
+  return (
+    <div className="scope-switch">
+      <span className="muted small">Repeating · change</span>
+      <div className="segmented" role="radiogroup" aria-label="What to change">
+        <button type="button" role="radio" aria-checked={scope === 'one'} className={scope === 'one' ? 'on' : undefined} onClick={() => onChange('one')}>
+          Only {occLabel}
+        </button>
+        <button type="button" role="radio" aria-checked={scope === 'all'} className={scope === 'all' ? 'on' : undefined} onClick={() => onChange('all')}>
+          Every occurrence
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
-  const { saveEvent, removeEvent, settings, areaIdOf } = useStore();
-  // An occurrence of a repeating event edits the whole series, so start from the series' own times.
-  const seriesInitial: Partial<CalEvent> = {
-    ...initial,
-    start_at: initial.series_start_at ?? initial.start_at,
-    end_at: initial.series_end_at ?? initial.end_at,
-  };
+export function EventEditor({ initial, onClose, top }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode }) {
+  const isOcc = !!(initial.id && initial.recurrence && initial.occ_date);
+  const [scope, setScope] = useState<Scope>(isOcc ? 'one' : 'all');
+  if (initial.kind === 'ext') return <ExternalEvent ev={initial as CalEvent} onClose={onClose} />;
+  const occLabel = initial.occ_date ? parseYmd(initial.occ_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  return (
+    <OwnEvent
+      key={scope}
+      initial={initial}
+      onClose={onClose}
+      scope={isOcc ? scope : 'all'}
+      top={
+        <>
+          {top}
+          {isOcc && <ScopeSwitch scope={scope} onChange={setScope} occLabel={occLabel} />}
+        </>
+      }
+    />
+  );
+}
+
+const OCC_FIELDS: (keyof CalEvent)[] = ['title', 'start_at', 'end_at', 'attendance', 'location', 'notes', 'priority', 'category_id', 'area_id', 'reminder_min'];
+
+function OwnEvent({ initial, onClose, top, scope }: { initial: Partial<CalEvent>; onClose: () => void; top?: ReactNode; scope: Scope }) {
+  const { saveEvent, removeEvent, settings, areaIdOf, setOccurrence, tasks, openEditor } = useStore();
+  // Editing every occurrence starts from the series' own times; editing one starts from that occurrence.
+  const seriesInitial: Partial<CalEvent> =
+    scope === 'one'
+      ? initial
+      : { ...initial, start_at: initial.series_start_at ?? initial.start_at, end_at: initial.series_end_at ?? initial.end_at };
   const [e, setE] = useState<Partial<CalEvent>>({
     all_day: 0, location: '', notes: '', priority: 0, attendance: 'yes', recurrence: null, recur_until: null,
     reminder_min: initial.id ? null : settings.defaultReminderMin,
     ...seriesInitial, area_id: initial.area_id ?? areaIdOf(initial),
   });
+  const one = scope === 'one';
+  const occPrevVal = initial.override
+    ? { kind: 'event' as const, series_id: initial.id!, occ_date: initial.occ_date!, cancelled: !!initial.override.cancelled, done_at: initial.override.done_at, data: initial.override.data }
+    : null;
+  const linkedTask = e.task_id ? tasks.find((t) => t.id === e.task_id) : undefined;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof CalEvent>(k: K, v: CalEvent[K] | null) => setE((x) => ({ ...x, [k]: v }));
   const allDay = !!e.all_day;
-  const repeating = !!initial.recurrence;
+  const repeating = !!initial.recurrence && scope === 'all';
 
   function toggleAllDay(on: boolean) {
     if (on) {
@@ -58,6 +100,15 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
   async function save() {
     if (!e.title?.trim() || !e.start_at || !e.end_at) return;
     const { source_id: _s, ext_id: _x, series_id: _r, source_name: _n, source_kind: _k, series_start_at: _ss, series_end_at: _se, ...own } = e;
+    if (one) {
+      // Only this occurrence: store just the fields that differ from it.
+      const diff: Record<string, unknown> = { ...(initial.override?.data ?? {}) };
+      for (const k of OCC_FIELDS) if (e[k] !== initial[k]) diff[k] = e[k] ?? null;
+      diff.title = e.title.trim();
+      await setOccurrence({ kind: 'event', series_id: initial.id!, occ_date: initial.occ_date!, data: diff }, occPrevVal, `Changed “${e.title.trim()}” on ${initial.occ_date}`);
+      onClose();
+      return;
+    }
     if (!own.recurrence) own.recur_until = null;
     await saveEvent({ ...own, title: e.title.trim() }, seriesInitial);
     onClose();
@@ -69,7 +120,23 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
       onClose={onClose}
       footer={
         <>
+          {e.id && one && (
+            <button
+              className="btn-ghost"
+              onClick={async () => {
+                await setOccurrence(
+                  { kind: 'event', series_id: initial.id!, occ_date: initial.occ_date!, cancelled: true, data: initial.override?.data ?? {} },
+                  occPrevVal,
+                  `Cancelled “${initial.title}” on ${initial.occ_date}`,
+                );
+                onClose();
+              }}
+            >
+              <Icon name="close" size={16} /> Cancel this one
+            </button>
+          )}
           {e.id &&
+            !one &&
             (confirmDelete ? (
               <button className="btn-danger" onClick={async () => { await removeEvent(initial as CalEvent); onClose(); }}>
                 {repeating ? 'Delete every occurrence' : 'Confirm delete'}
@@ -84,7 +151,12 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
       }
     >
       {top}
-      {repeating && e.id && <p className="muted small note">Repeating event: changes apply to every occurrence.</p>}
+      {repeating && e.id && <p className="muted small note">Changes apply to every occurrence, except ones you changed individually.</p>}
+      {linkedTask && (
+        <button type="button" className="link-btn crumb" onClick={() => openEditor({ type: 'task', task: linkedTask })}>
+          <Icon name="link" size={14} /> For task “{linkedTask.title}”
+        </button>
+      )}
       <form className="form" onSubmit={(ev) => { ev.preventDefault(); save(); }}>
         <label className="field full">
           <span>Title</span>
@@ -106,7 +178,7 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
           <span>Planned attendance</span>
           <AttendancePicker value={(e.attendance ?? 'yes') as Attendance} onChange={(v) => set('attendance', v)} />
         </div>
-        <label className="field full toggle-row">
+        <label className="field full toggle-row" hidden={one}>
           <input type="checkbox" checked={allDay} onChange={(x) => toggleAllDay(x.target.checked)} />
           <span>All day (turns the whole day white on the calendar)</span>
         </label>
@@ -152,11 +224,13 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
             </div>
           </>
         )}
-        <label className="field">
-          <span>Repeat</span>
-          <RepeatSelect value={e.recurrence ?? null} onChange={(v) => set('recurrence', v)} />
-        </label>
-        {e.recurrence ? (
+        {!one && (
+          <label className="field">
+            <span>Repeat</span>
+            <RepeatSelect value={e.recurrence ?? null} onChange={(v) => set('recurrence', v)} />
+          </label>
+        )}
+        {one ? null : e.recurrence ? (
           <div className="field">
             <span>Repeat until (optional)</span>
             <DateField ariaLabel="Repeat until" placeholder="Forever" min={e.start_at?.slice(0, 10)} value={e.recur_until ?? null} onChange={(v) => set('recur_until', v)} />
@@ -172,10 +246,9 @@ function OwnEvent({ initial, onClose, top }: { initial: Partial<CalEvent>; onClo
           <span>Reminder</span>
           <ReminderSelect value={e.reminder_min ?? null} onChange={(v) => set('reminder_min', v)} />
         </label>
-        <label className="field full">
-          <span>Notes</span>
-          <textarea rows={3} value={e.notes ?? ''} onChange={(x) => set('notes', x.target.value)} />
-        </label>
+        <div className="field full">
+          <NotesEditor value={e.notes ?? ''} onChange={(v) => set('notes', v)} />
+        </div>
         <button type="submit" hidden />
       </form>
     </Modal>

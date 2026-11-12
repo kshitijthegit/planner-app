@@ -26,14 +26,14 @@ interface Row {
 }
 
 export function TodayView() {
-  const { tasks, goals, settings, openEditor, colorOf, labelOf, completeTask, reopenTask } = useStore();
+  const { tasks, settings, openEditor, colorOf, labelOf, completeTask, reopenTask } = useStore();
   const mobile = useIsMobile();
   const now = useNow();
   const dayStart = useMemo(() => startOfDay(now), [ymd(now)]); // eslint-disable-line react-hooks/exhaustive-deps
   const today = ymd(dayStart);
-  const { events } = useAgenda(dayStart, addDays(dayStart, 1));
+  const { events, goals: agendaGoals } = useAgenda(dayStart, addDays(dayStart, 1));
 
-  const items = useMemo(() => itemsOnDay(buildItems(events, tasks, goals), dayStart), [events, tasks, goals, dayStart]);
+  const items = useMemo(() => itemsOnDay(buildItems(events, tasks, agendaGoals), dayStart), [events, tasks, agendaGoals, dayStart]);
   // Top of the day: all-day events and goals (untimed tasks live in the to-do list).
   const allDay = items.filter((i) => i.allDay && i.kind !== 'task').sort(topRowOrder);
   const timed = items.filter((i) => !i.allDay);

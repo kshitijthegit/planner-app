@@ -1,10 +1,12 @@
 import { all, first, HttpError, json, nowIso, patchRow, readJson, restorableId, run, str, type Env } from '../lib/core';
 import { occurrences, validRecurrence, type SeriesRow } from '../lib/recur';
 import { getSettings } from '../lib/settings';
+import { addDaysIso, localParts } from '../lib/time';
+import { goalsBetween, loadOverrides } from './occurrences';
 import type { BackendModule } from './types';
 import { validPriority } from './tasks';
 
-const FIELDS = ['title', 'notes', 'category_id', 'area_id', 'priority', 'start_at', 'end_at', 'all_day', 'location', 'reminder_min', 'attendance', 'recurrence', 'recur_until'];
+const FIELDS = ['title', 'notes', 'category_id', 'area_id', 'priority', 'start_at', 'end_at', 'all_day', 'location', 'reminder_min', 'attendance', 'recurrence', 'recur_until', 'task_id'];
 const ATTENDANCE = ['yes', 'no', 'maybe'];
 
 function validate(b: Record<string, unknown>, creating: boolean) {
@@ -42,8 +44,13 @@ export async function ownEventsBetween(env: Env, fromMs: number, toMs: number, t
     `SELECT *, 'own' AS kind FROM events WHERE recurrence IS NOT NULL AND start_at < ? AND (recur_until IS NULL OR recur_until >= ?)`,
     hi, lo.slice(0, 10),
   );
+  const ov = await loadOverrides(env, 'event', series.map((e) => e.id));
   const expanded = series.flatMap((ev) =>
-    occurrences(ev, fromMs - 86400000, toMs + 86400000, tz).map((o) => ({ ...ev, ...o, series_start_at: ev.start_at, series_end_at: ev.end_at })),
+    occurrences(ev, fromMs - 86400000, toMs + 86400000, tz).flatMap((o) => {
+      const x = ov.get(`${ev.id}|${o.occ_date}`);
+      if (x?.cancelled) return [];
+      return [{ ...ev, ...o, ...(x?.data ?? {}), occ_date: o.occ_date, series_start_at: ev.start_at, series_end_at: ev.end_at, overridden: !!x, override: x ?? null } as OwnRow];
+    }),
   );
   return [...single, ...expanded];
 }
@@ -72,7 +79,9 @@ export const eventsModule: BackendModule = {
         hi,
         lo.slice(0, 10),
       );
-      return json({ events: [...own, ...ext] });
+      const tz = (await getSettings(env)).timezone;
+      const goals = await goalsBetween(env, addDaysIso(localParts(new Date(from), tz).date, -1), addDaysIso(localParts(new Date(to), tz).date, 1), tz);
+      return json({ events: [...own, ...ext], goals });
     });
 
     r.post('/api/events', async ({ env, req }) => {
@@ -83,10 +92,10 @@ export const eventsModule: BackendModule = {
       await run(
         env,
         `INSERT INTO events (id, title, notes, category_id, area_id, priority, start_at, end_at, all_day, location, reminder_min,
-           attendance, recurrence, recur_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           attendance, recurrence, recur_until, task_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id, b.title, b.notes ?? '', b.category_id ?? null, b.area_id ?? null, b.priority ?? 0, b.start_at, b.end_at, b.all_day ? 1 : 0,
-        b.location ?? '', b.reminder_min ?? null, b.attendance ?? 'yes', b.recurrence ?? null, b.recur_until ?? null, now, now,
+        b.location ?? '', b.reminder_min ?? null, b.attendance ?? 'yes', b.recurrence ?? null, b.recur_until ?? null, b.task_id ?? null, now, now,
       );
       return json(await getEvent(env, id), 201);
     });
@@ -99,7 +108,13 @@ export const eventsModule: BackendModule = {
       return json(await getEvent(env, params.id));
     });
 
+    /** Events created to work on a task. */
+    r.get('/api/events/by-task/:id', async ({ env, params }) =>
+      json(await all(env, "SELECT *, 'own' AS kind FROM events WHERE task_id = ? ORDER BY start_at", params.id)),
+    );
+
     r.delete('/api/events/:id', async ({ env, params }) => {
+      await env.DB.prepare("DELETE FROM occurrence_overrides WHERE kind = 'event' AND series_id = ?").bind(params.id).run();
       await run(env, 'DELETE FROM events WHERE id = ?', params.id);
       return json({ ok: true });
     });

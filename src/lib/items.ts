@@ -60,7 +60,7 @@ export function taskToItem(t: Task): Item | null {
 
 export function goalToItem(g: Goal): Item {
   return {
-    key: `goal:${g.id}`,
+    key: `goal:${g.id}:${g.occ_date ?? ''}`,
     kind: 'goal',
     title: g.title,
     start: parseYmd(g.start_date),
@@ -125,7 +125,8 @@ export function stagger(item: Item, sameDay: Item[]): number {
 
 /** A day is "blocked out" (white background) when an all-day event covers it. */
 export function isWholeDay(items: Item[], day: Date): boolean {
-  return itemsOnDay(items, day).some((i) => i.allDay && (i.kind === 'own' || i.kind === 'ext'));
+  // Public holidays / festivals are markers only; they don't block out the day.
+  return itemsOnDay(items, day).some((i) => i.allDay && (i.kind === 'own' || i.kind === 'ext') && i.event?.source_kind !== 'holiday');
 }
 
 export interface Placed {
@@ -184,4 +185,9 @@ export function onDark(hex: string): string {
 export function attClass(it: Item): string {
   const a = it.event?.attendance;
   return a === 'no' ? ' att-no' : a === 'maybe' ? ' att-maybe' : '';
+}
+
+/** The current per-occurrence change of a repeating event/goal, in the shape the API takes (for undo). */
+export function occPrev(kind: 'event' | 'goal', seriesId: string, occDate: string, ov: { cancelled: number; done_at: string | null; data: Record<string, unknown> } | null | undefined) {
+  return ov ? { kind, series_id: seriesId, occ_date: occDate, cancelled: !!ov.cancelled, done_at: ov.done_at, data: ov.data } : null;
 }

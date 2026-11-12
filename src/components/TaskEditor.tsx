@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { api, type CalEvent } from '../api';
 import type { Task } from '../api';
 import { ymd } from '../lib/date';
 import { DateField, DateTimeField, TimeField } from './pickers';
 import { useStore } from '../store';
 import { Icon } from './Icon';
+import { NotesEditor } from './NotesEditor';
 import { AreaSelect, CategorySelect, childrenOf, depthOf, DurationSelect, MAX_SUBTASK_DEPTH, Modal, PrioritySelect, ReminderSelect, RepeatSelect, TaskLine } from './ui';
 
 export function TaskEditor({ initial, onClose, top }: { initial: Partial<Task>; onClose: () => void; top?: ReactNode }) {
@@ -107,12 +109,20 @@ export function TaskEditor({ initial, onClose, top }: { initial: Partial<Task>; 
           <input type="checkbox" checked={t.top3_date === today} onChange={(e) => set('top3_date', e.target.checked ? today : null)} />
           <span>In today's Top 3</span>
         </label>
-        <label className="field full">
-          <span>Notes</span>
-          <textarea rows={3} value={t.notes ?? ''} onChange={(e) => set('notes', e.target.value)} />
-        </label>
+        <div className="field full">
+          <NotesEditor value={t.notes ?? ''} onChange={(v) => set('notes', v)} />
+        </div>
         <button type="submit" hidden />
       </form>
+      {t.id && (
+        <LinkedEvents
+          task={t as Task}
+          beforeOpen={async () => {
+            // Keep unsaved edits (e.g. checklist ticks) before switching to the event.
+            if (t.title?.trim()) await saveTask({ ...t, title: t.title.trim() });
+          }}
+        />
+      )}
       {canHaveSubtasks && (
         <section className="subtasks" aria-labelledby="subs-h">
           <h3 id="subs-h">Subtasks <span className="muted small">· each can have its own deadline{depth === 0 ? ' and its own subtasks' : ''}</span></h3>
@@ -154,5 +164,57 @@ function SubtaskRow({ task, level }: { task: Task; level: number }) {
       />
       {level < MAX_SUBTASK_DEPTH && kids.map((k) => <SubtaskRow key={k.id} task={k} level={level + 1} />)}
     </div>
+  );
+}
+
+/** Events created to work on this task, plus a button to schedule one. */
+function LinkedEvents({ task, beforeOpen }: { task: Task; beforeOpen: () => Promise<void> }) {
+  const { openEditor, agendaVersion, areaIdOf } = useStore();
+  const [events, setEvents] = useState<CalEvent[] | null>(null);
+  useEffect(() => {
+    api.get<CalEvent[]>(`/api/events/by-task/${task.id}`).then(setEvents).catch(() => setEvents([]));
+  }, [task.id, agendaVersion]);
+
+  async function schedule() {
+    await beforeOpen();
+    let start: Date;
+    if (task.scheduled_start) start = new Date(task.scheduled_start);
+    else {
+      start = new Date();
+      start.setHours(start.getHours() + 1, 0, 0, 0);
+      if (task.due_date && task.due_date > ymd(start)) {
+        start = new Date(`${task.due_date}T09:00:00`);
+      }
+    }
+    const end = new Date(start.getTime() + (task.duration_min || 60) * 60000);
+    openEditor({
+      type: 'event',
+      event: {
+        kind: 'own', task_id: task.id, title: `Work on: ${task.title}`, area_id: areaIdOf(task), category_id: task.category_id,
+        priority: task.priority, start_at: start.toISOString(), end_at: end.toISOString(), all_day: 0,
+      },
+    });
+  }
+
+  return (
+    <section className="subtasks" aria-labelledby="linked-h">
+      <h3 id="linked-h">Linked events <span className="muted small">· time booked on your calendar to do this</span></h3>
+      {events?.map((e) => {
+        const s = new Date(e.start_at);
+        return (
+          <button key={e.id} type="button" className="linked-event" onClick={async () => { await beforeOpen(); openEditor({ type: 'event', event: e }); }}>
+            <Icon name="calendar" size={14} />
+            <span className="grow">{e.title}</span>
+            <span className="muted small">
+              {e.all_day ? e.start_at : `${s.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} ${s.toTimeString().slice(0, 5)}`}
+              {e.recurrence ? ' · repeats' : ''}
+            </span>
+          </button>
+        );
+      })}
+      <button type="button" className="btn-ghost small-btn" onClick={schedule}>
+        <Icon name="plus" size={14} /> Create linked event
+      </button>
+    </section>
   );
 }

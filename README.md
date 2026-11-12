@@ -31,6 +31,13 @@ An installable PWA (Android + Windows) on Cloudflare Workers with D1 storage.
 - Events can repeat (`recurrence` and `recur_until`, expanded server-side in `worker/lib/recur.ts`). The default is no repeat, and editing one occurrence edits the whole series.
 - Undo: press Ctrl/⌘+Z outside text fields, or use the Undo button on the toast. It covers creating, editing, completing, reopening and deleting tasks, events and goals, plus attendance and sub-category changes.
 - Themed date and time pickers (`src/components/pickers.tsx`) replace the browser's own pop-ups.
+- Calendar tasks: day and week views show every task, with subtasks indented under their parent. Month view shows "N tasks due" per day.
+- Notes can hold a checklist, stored inside the notes as `- [ ]` / `- [x]` lines (`NotesEditor`).
+- Linked events: a task can have events booked to work on it (`events.task_id`).
+- Goals can repeat. For repeating events and goals, any single occurrence can be edited, cancelled or (goals) marked achieved without changing the rest, via the `occurrence_overrides` table and `/api/occurrences`.
+- Google sync can be limited to certain event types (`config.eventTypes`: default, birthday, fromGmail, outOfOffice, focusTime, workingLocation).
+- Public holidays and festivals come from Google's public holiday ICS feeds (`worker/lib/holidays.ts`). They show as markers and never block out the day.
+- Calendar files (.ics) can be uploaded. They're stored in `source_files` and kept read-only, with on/off and remove like other calendars.
 - Migration v2 wiped all calendar data once (Nov 2026). Linked calendars stayed listed, with sync switched off.
 
 ## Modules

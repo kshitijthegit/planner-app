@@ -44,6 +44,8 @@ interface Store {
   setExtAttendance: (sourceId: string, extId: string, attendance: Attendance, prev?: Attendance) => Promise<void>;
   undo: () => Promise<void>;
   canUndo: boolean;
+  /** Change one occurrence of a repeating event/goal. prev = its current override (null if none) for undo. */
+  setOccurrence: (o: OccChange, prev: OccChange | null, label: string) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
   editor: Editor;
   openEditor: (e: Editor) => void;
@@ -52,6 +54,14 @@ interface Store {
 }
 
 type Attendance = 'yes' | 'no' | 'maybe';
+export interface OccChange {
+  kind: 'event' | 'goal';
+  series_id: string;
+  occ_date: string;
+  cancelled?: boolean;
+  done_at?: string | null;
+  data?: Record<string, unknown>;
+}
 interface ToastAction {
   label: string;
   run: () => void;
@@ -336,6 +346,11 @@ export function StoreProvider({ boot, children }: { boot: Boot; children: ReactN
       },
       undo,
       canUndo,
+      async setOccurrence(o, prev, label) {
+        await guard(api.put('/api/occurrences', o));
+        bumpAgenda();
+        pushUndo(label, () => (prev ? api.put('/api/occurrences', prev) : api.post('/api/occurrences/reset', o)));
+      },
       async updateSettings(patch) {
         setSettings(await guard(api.put<Settings>('/api/settings', patch)));
       },
@@ -350,9 +365,10 @@ export function StoreProvider({ boot, children }: { boot: Boot; children: ReactN
 }
 
 /** Fetch calendar events for [from, to); refetches when anything calendar-related changes. */
-export function useAgenda(from: Date, to: Date): { events: CalEvent[]; loading: boolean } {
-  const { agendaVersion } = useStore();
+export function useAgenda(from: Date, to: Date): { events: CalEvent[]; goals: Goal[]; loading: boolean } {
+  const { agendaVersion, goals: goalSeries } = useStore();
   const [events, setEvents] = useState<CalEvent[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const f = from.getTime();
   const t = to.getTime();
@@ -360,15 +376,19 @@ export function useAgenda(from: Date, to: Date): { events: CalEvent[]; loading: 
     let alive = true;
     setLoading(true);
     api
-      .get<{ events: CalEvent[] }>(`/api/agenda?from=${new Date(f).toISOString()}&to=${new Date(t).toISOString()}`)
-      .then((r) => alive && setEvents(r.events))
+      .get<{ events: CalEvent[]; goals: Goal[] }>(`/api/agenda?from=${new Date(f).toISOString()}&to=${new Date(t).toISOString()}`)
+      .then((r) => {
+        if (!alive) return;
+        setEvents(r.events);
+        setGoals(r.goals ?? []);
+      })
       .catch(() => {})
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [f, t, agendaVersion]);
-  return { events, loading };
+  }, [f, t, agendaVersion, goalSeries]);
+  return { events, goals, loading };
 }
 
 export function useMediaQuery(q: string): boolean {

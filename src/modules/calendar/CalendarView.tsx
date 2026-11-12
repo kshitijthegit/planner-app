@@ -20,7 +20,7 @@ function loadHidden(): Set<string> {
 }
 
 export function CalendarView() {
-  const { tasks, goals, areas, saveTask, openEditor, sources, settings, areaIdOf } = useStore();
+  const { tasks, areas, saveTask, openEditor, sources, settings, areaIdOf } = useStore();
   const mobile = useIsMobile();
   const now = useNow();
   const [view, setView] = useState<View>(mobile ? 'day' : 'week');
@@ -39,11 +39,11 @@ export function CalendarView() {
     return [s, addDays(s, 42), []];
   }, [view, anchor]);
 
-  const { events } = useAgenda(from, to);
+  const { events, goals: agendaGoals } = useAgenda(from, to);
   const items = useMemo(
-    // Week and month show main tasks only; day view also shows subtasks (labelled with their parents).
-    () => buildItems(events, tasks, goals, { topLevelOnly: view !== 'day' }).filter((i) => !hidden.has(i.areaId ?? areaIdOf({ category_id: i.categoryId }) ?? 'none')),
-    [events, tasks, goals, hidden, areaIdOf, view],
+    // Day and week show every task with its hierarchy; month shows a "N tasks due" count per day.
+    () => buildItems(events, tasks, agendaGoals).filter((i) => !hidden.has(i.areaId ?? areaIdOf({ category_id: i.categoryId }) ?? 'none')),
+    [events, tasks, agendaGoals, hidden, areaIdOf],
   );
 
   function toggleCat(id: string) {

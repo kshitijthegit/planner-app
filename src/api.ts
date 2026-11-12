@@ -31,7 +31,7 @@ export interface CalEvent {
   ext_id?: string;
   series_id?: string;
   source_name?: string;
-  source_kind?: 'google' | 'ics';
+  source_kind?: 'google' | 'ics' | 'holiday' | 'file';
   title: string;
   notes?: string;
   start_at: string; // ISO, or YYYY-MM-DD when all_day
@@ -47,6 +47,10 @@ export interface CalEvent {
   recur_until?: string | null; // YYYY-MM-DD inclusive
   series_start_at?: string; // set on occurrences of a repeating event
   series_end_at?: string;
+  occ_date?: string; // identifies one occurrence of a repeating event
+  overridden?: boolean; // this occurrence has its own changes
+  override?: { cancelled: number; done_at: string | null; data: Record<string, unknown> } | null;
+  task_id?: string | null; // event created to work on a task
 }
 
 export interface Goal {
@@ -61,11 +65,18 @@ export interface Goal {
   done_at: string | null;
   created_at: string;
   updated_at: string;
+  recurrence?: string | null;
+  recur_until?: string | null;
+  occ_date?: string; // agenda occurrences of repeating goals
+  series_start_date?: string;
+  series_end_date?: string;
+  overridden?: boolean;
+  override?: { cancelled: number; done_at: string | null; data: Record<string, unknown> } | null;
 }
 
 export interface Source {
   id: string;
-  kind: 'google' | 'ics';
+  kind: 'google' | 'ics' | 'holiday' | 'file';
   name: string;
   category_id: string | null;
   reminder_min: number | null;
@@ -76,6 +87,9 @@ export interface Source {
   urlHint?: string;
   eventCount?: number;
   calendarCounts?: Record<string, number>;
+  eventTypes?: string[];
+  holidayId?: string;
+  fileName?: string;
 }
 
 export interface Settings {

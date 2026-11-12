@@ -1,12 +1,12 @@
 // Read-only calendar sync: Google Calendar + ICS feeds → ext_events table.
-import { all, nowIso, run, type Env } from './core';
+import { all, first, nowIso, run, type Env } from './core';
 import { fetchGoogleEvents, type ExtEvent } from './google';
 import { parseIcs } from './ics';
 import { getSettings } from './settings';
 
 export interface SourceRow {
   id: string;
-  kind: 'google' | 'ics';
+  kind: 'google' | 'ics' | 'holiday' | 'file';
   name: string;
   config: string;
   category_id: string | null;
@@ -23,15 +23,26 @@ export async function syncSource(env: Env, src: SourceRow): Promise<{ count: num
   const from = new Date(Date.now() - 14 * 86400000);
   const to = new Date(Date.now() + 150 * 86400000);
   try {
-    const config = JSON.parse(src.config || '{}') as { url?: string; calendarIds?: string[] };
+    const config = JSON.parse(src.config || '{}') as { url?: string; calendarIds?: string[]; eventTypes?: string[] };
     let events: ExtEvent[] = [];
     if (src.kind === 'google') {
       const ids = config.calendarIds ?? ['primary']; // [] = every calendar switched off
-      for (const id of ids) events.push(...(await fetchGoogleEvents(env, id, from, to)));
+      const types = config.eventTypes; // undefined = all types
+      if (!types || types.length)
+        for (const id of ids) events.push(...(await fetchGoogleEvents(env, id, from, to, types)));
+    } else if (src.kind === 'file') {
+      const file = await first<{ content: string }>(env, 'SELECT content FROM source_files WHERE source_id = ?', src.id);
+      if (!file) throw new Error('Uploaded file is missing; upload it again');
+      events = parseIcs(file.content, settings.timezone, from, to);
     } else {
       if (!config.url) throw new Error('No ICS URL set');
       const url = config.url.replace(/^webcal:\/\//i, 'https://');
-      const res = await fetch(url, { headers: { accept: 'text/calendar' } });
+      let res: Response;
+      try {
+        res = await fetch(url, { headers: { accept: 'text/calendar' } });
+      } catch {
+        throw new Error('Couldn’t reach the calendar server; will retry');
+      }
       if (!res.ok) throw new Error(`ICS fetch failed: HTTP ${res.status}`);
       events = parseIcs(await res.text(), settings.timezone, from, to);
     }

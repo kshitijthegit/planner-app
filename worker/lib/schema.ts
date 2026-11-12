@@ -90,6 +90,18 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE events ADD COLUMN recur_until TEXT`,
     `CREATE TABLE ext_attendance (source_id TEXT NOT NULL, ext_id TEXT NOT NULL, attendance TEXT NOT NULL, PRIMARY KEY (source_id, ext_id))`,
   ],
+  // v5 — linked events for tasks, repeating goals, per-occurrence changes, Google event-type filter, uploaded calendar files.
+  [
+    `ALTER TABLE events ADD COLUMN task_id TEXT`,
+    `ALTER TABLE goals ADD COLUMN recurrence TEXT`,
+    `ALTER TABLE goals ADD COLUMN recur_until TEXT`,
+    `CREATE TABLE occurrence_overrides (
+      kind TEXT NOT NULL, series_id TEXT NOT NULL, occ_date TEXT NOT NULL,
+      cancelled INTEGER NOT NULL DEFAULT 0, done_at TEXT, data TEXT NOT NULL DEFAULT '{}',
+      PRIMARY KEY (kind, series_id, occ_date))`,
+    `CREATE TABLE source_files (source_id TEXT PRIMARY KEY, content TEXT NOT NULL)`,
+    `UPDATE sources SET config = json_set(config, '$.eventTypes', json('["default","birthday"]')) WHERE kind = 'google'`,
+  ],
 ];
 
 let migratedInIsolate = false;

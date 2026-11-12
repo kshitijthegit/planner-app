@@ -3,6 +3,7 @@ import type { Task } from '../api';
 import { relativeDay, ymd } from '../lib/date';
 import { useStore } from '../store';
 import { Icon } from './Icon';
+import { checklistProgress } from './NotesEditor';
 
 export function Modal({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -307,6 +308,8 @@ export function TaskLine({ task, compact, extra, hideCategory }: { task: Task; c
   if (task.priority) meta.push(<span key="p" className={`prio p${Math.min(task.priority, 3)}`}><Icon name="flag" size={12} /> {settings.priorityLabels[task.priority] ?? `P${task.priority}`}</span>);
   if (task.recurrence) meta.push(<span key="r" className="inline-icon"><Icon name="repeat" size={12} /> {repeatLabel(task.recurrence)}</span>);
   if (subs.length) meta.push(<span key="s">{subs.filter((s) => s.done_at).length}/{subs.length} subtasks</span>);
+  const cl = checklistProgress(task.notes);
+  if (cl) meta.push(<span key="c" className="inline-icon"><Icon name="tasks" size={12} /> {cl}</span>);
   return (
     <div className={`task-line${task.done_at ? ' done' : ''}${compact ? ' compact' : ''}`}>
       <Check checked={!!task.done_at} label={`Complete ${task.title}`} onChange={(v) => (v ? completeTask(task.id) : reopenTask(task.id))} />

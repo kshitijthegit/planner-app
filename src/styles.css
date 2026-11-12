@@ -630,3 +630,42 @@ body, .rail, .bottom-nav, .card, .modal, .tray-sheet { transition: background-co
 .tg-top-cell .pill-task.sub::before { content: ''; position: absolute; left: -10px; top: -4px; width: 7px; height: 13px; border-left: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); border-bottom-left-radius: 4px; }
 .tg-top-cell { overflow-y: auto; }
 .tg.day .tg-top-cell { max-height: 210px; }
+
+/* ---------- Occurrence scope, linked events, checklist ---------- */
+.scope-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.linked-event {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; font-size: 13px;
+}
+.linked-event:hover { border-color: var(--accent); }
+.subtasks .btn-ghost.small-btn { align-self: flex-start; }
+.notes-editor { display: flex; flex-direction: column; gap: 6px; }
+.notes-head { display: flex; align-items: center; justify-content: space-between; }
+.notes-head label { font-size: 13px; color: var(--muted); }
+.notes-head .link-btn { display: inline-flex; align-items: center; gap: 4px; }
+.checklist { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.checklist-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text); padding-bottom: 4px; }
+.check-item { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.check-item.add { color: var(--muted); padding-left: 2px; }
+.check-text { min-height: 34px; border-color: transparent; background: transparent; padding: 0 6px; }
+.check-text:hover, .check-text:focus { border-color: var(--border-2); background: var(--surface); }
+.check-item.done .check-text { text-decoration: line-through; color: var(--muted); }
+
+/* ---------- Month task counts, holidays ---------- */
+.month-tasks { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--accent); margin-top: auto; }
+.theme-light .month-tasks { color: #6f4e37; }
+.month-cell.whole .month-tasks { color: #6f4e37; }
+.pill-event.holiday { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 500; gap: 4px; display: flex; align-items: center; }
+.whole .pill-event.holiday { color: #2b1d14; }
+
+/* ---------- Linked calendars extras ---------- */
+.type-picks h3, .holiday-group h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 6px 0 2px; font-family: inherit; }
+.type-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; }
+@media (max-width: 600px) { .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.file-pick {
+  position: relative; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 14px; border-radius: 12px;
+  border: 1px dashed var(--border-2); color: var(--text); cursor: pointer;
+}
+.file-pick:hover { border-color: var(--accent); }
+.file-pick svg { color: var(--accent); }
+.file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

@@ -1,11 +1,12 @@
 import { all, first, HttpError, json, kvGet, readJson, run, str, uuid } from '../lib/core';
-import { listCalendars } from '../lib/google';
+import { GOOGLE_EVENT_TYPES, listCalendars } from '../lib/google';
+import { HOLIDAY_CALENDARS, holidayIcsUrl } from '../lib/holidays';
 import { syncDue, syncSource, type SourceRow } from '../lib/sync';
 import type { BackendModule } from './types';
 
 /** Never send the full ICS URL back to the browser: it is effectively a password. */
 function publicSource(s: SourceRow) {
-  const cfg = JSON.parse(s.config || '{}') as { url?: string; calendarIds?: string[] };
+  const cfg = JSON.parse(s.config || '{}') as { url?: string; calendarIds?: string[]; eventTypes?: string[]; holidayId?: string; fileName?: string };
   let urlHint: string | undefined;
   if (cfg.url) {
     try {
@@ -14,7 +15,8 @@ function publicSource(s: SourceRow) {
       urlHint = '…';
     }
   }
-  return { ...s, config: undefined, calendarIds: cfg.calendarIds, urlHint };
+  if (s.kind === 'holiday' || s.kind === 'file') urlHint = undefined;
+  return { ...s, config: undefined, calendarIds: cfg.calendarIds, eventTypes: cfg.eventTypes, holidayId: cfg.holidayId, fileName: cfg.fileName, urlHint };
 }
 
 function validUrl(v: unknown): string {
@@ -47,6 +49,46 @@ export const sourcesModule: BackendModule = {
       });
     });
 
+    r.get('/api/holidays/catalog', () => json(HOLIDAY_CALENDARS));
+
+    /** Turn on a public-holiday / festival calendar. */
+    r.post('/api/sources/holiday', async ({ env, req }) => {
+      const b = await readJson(req);
+      const cal = HOLIDAY_CALENDARS.find((h) => h.id === b.holidayId);
+      if (!cal) throw new HttpError(400, 'Unknown holiday calendar');
+      const existing = await first<SourceRow>(env, "SELECT * FROM sources WHERE kind = 'holiday' AND json_extract(config, '$.holidayId') = ?", cal.id);
+      if (existing) {
+        await run(env, 'UPDATE sources SET enabled = 1 WHERE id = ?', existing.id);
+        return json({ id: existing.id, ...(await syncSource(env, { ...existing, enabled: 1 })) });
+      }
+      const id = uuid();
+      await run(
+        env,
+        "INSERT INTO sources (id, kind, name, config, category_id, reminder_min) VALUES (?, 'holiday', ?, ?, NULL, NULL)",
+        id, cal.name, JSON.stringify({ holidayId: cal.id, url: holidayIcsUrl(cal.id) }),
+      );
+      const src = (await first<SourceRow>(env, 'SELECT * FROM sources WHERE id = ?', id))!;
+      return json({ id, ...(await syncSource(env, src)) }, 201);
+    });
+
+    /** Upload a calendar file (.ics). Its events are kept read-only, like a linked calendar. */
+    r.post('/api/sources/upload', async ({ env, req }) => {
+      const b = await readJson(req);
+      const content = str(b.content, 'content', { max: 5_000_000 })!;
+      if (!content.includes('BEGIN:VCALENDAR')) throw new HttpError(400, 'That doesn’t look like a calendar (.ics) file');
+      const id = uuid();
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO sources (id, kind, name, config, category_id, reminder_min) VALUES (?, 'file', ?, ?, ?, ?)").bind(
+          id, str(b.name, 'name', { max: 80 }), JSON.stringify({ fileName: typeof b.fileName === 'string' ? b.fileName.slice(0, 120) : undefined }),
+          b.category_id ?? null, b.reminder_min ?? null,
+        ),
+        env.DB.prepare('INSERT INTO source_files (source_id, content) VALUES (?, ?)').bind(id, content),
+      ]);
+      const src = (await first<SourceRow>(env, 'SELECT * FROM sources WHERE id = ?', id))!;
+      const result = await syncSource(env, src);
+      return json({ id, ...result }, 201);
+    });
+
     r.post('/api/sources', async ({ env, req }) => {
       const b = await readJson(req);
       if (b.kind !== 'ics') throw new HttpError(400, 'Only ICS sources can be added manually');
@@ -72,6 +114,9 @@ export const sourcesModule: BackendModule = {
       const cfg = JSON.parse(src.config || '{}');
       if (src.kind === 'ics' && b.url !== undefined) cfg.url = validUrl(b.url);
       let enabled = b.enabled !== undefined ? (b.enabled ? 1 : 0) : src.enabled;
+      if (src.kind === 'google' && Array.isArray(b.eventTypes)) {
+        cfg.eventTypes = b.eventTypes.filter((x): x is string => (GOOGLE_EVENT_TYPES as readonly string[]).includes(x as string));
+      }
       if (src.kind === 'google' && Array.isArray(b.calendarIds)) {
         cfg.calendarIds = b.calendarIds.filter((x) => typeof x === 'string');
         enabled = cfg.calendarIds.length ? 1 : 0; // Google source is "on" while any of its calendars is on
@@ -89,7 +134,7 @@ export const sourcesModule: BackendModule = {
       if (!enabled) {
         // Sync off: stop syncing and remove its events (they come back on the next sync when switched on).
         await run(env, 'DELETE FROM ext_events WHERE source_id = ?', src.id);
-      } else if (b.url !== undefined || b.calendarIds !== undefined || (b.enabled && !src.enabled)) {
+      } else if (b.url !== undefined || b.calendarIds !== undefined || b.eventTypes !== undefined || (b.enabled && !src.enabled)) {
         await syncSource(env, (await first<SourceRow>(env, 'SELECT * FROM sources WHERE id = ?', src.id))!);
       }
       return json({ ok: true });
@@ -99,6 +144,8 @@ export const sourcesModule: BackendModule = {
       await env.DB.batch([
         env.DB.prepare('DELETE FROM ext_events WHERE source_id = ?').bind(params.id),
         env.DB.prepare('DELETE FROM ext_overrides WHERE source_id = ?').bind(params.id),
+        env.DB.prepare('DELETE FROM ext_attendance WHERE source_id = ?').bind(params.id),
+        env.DB.prepare('DELETE FROM source_files WHERE source_id = ?').bind(params.id),
         env.DB.prepare('DELETE FROM sources WHERE id = ?').bind(params.id),
       ]);
       return json({ ok: true });

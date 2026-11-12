@@ -105,6 +105,7 @@ export interface ExtEvent {
 
 interface GEvent {
   id: string;
+  eventType?: string;
   status?: string;
   summary?: string;
   location?: string;
@@ -113,7 +114,10 @@ interface GEvent {
   end: { dateTime?: string; date?: string };
 }
 
-export async function fetchGoogleEvents(env: Env, calendarId: string, from: Date, to: Date): Promise<ExtEvent[]> {
+/** Google event types that can be synced (Calendar API `eventType`). */
+export const GOOGLE_EVENT_TYPES = ['default', 'birthday', 'fromGmail', 'outOfOffice', 'focusTime', 'workingLocation'] as const;
+
+export async function fetchGoogleEvents(env: Env, calendarId: string, from: Date, to: Date, eventTypes?: string[]): Promise<ExtEvent[]> {
   const out: ExtEvent[] = [];
   let pageToken: string | undefined;
   do {
@@ -125,12 +129,14 @@ export async function fetchGoogleEvents(env: Env, calendarId: string, from: Date
       maxResults: '2500',
     });
     if (pageToken) p.set('pageToken', pageToken);
+    for (const t of eventTypes ?? []) p.append('eventTypes', t);
     const data = await gget<{ items: GEvent[]; nextPageToken?: string }>(
       env,
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${p}`,
     );
     for (const e of data.items) {
       if (e.status === 'cancelled') continue;
+      if (eventTypes && !eventTypes.includes(e.eventType ?? 'default')) continue; // belt and braces
       const allDay = !!e.start.date;
       out.push({
         ext_id: `${calendarId}:${e.id}`,

@@ -3,6 +3,7 @@ import { areasModule } from './areas';
 import { authModule } from './auth';
 import { eventsModule } from './events';
 import { goalsModule } from './goals';
+import { occurrencesModule } from './occurrences';
 import { notifyModule } from './notify';
 import { pushModule } from './push';
 import { settingsModule } from './settings';
@@ -17,6 +18,7 @@ export const modules: BackendModule[] = [
   tasksModule,
   eventsModule,
   goalsModule,
+  occurrencesModule,
   sourcesModule,
   pushModule,
   notifyModule,

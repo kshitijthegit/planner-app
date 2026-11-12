@@ -82,7 +82,7 @@ export function AddFlow({ kind: startKind, initial, onClose }: Props) {
 
   // key forces a fresh editor when the type or area changes.
   if (kind === 'event')
-    return <EventEditor key={`e-${areaId}`} top={top} onClose={onClose} initial={{ kind: 'own', start_at: initial.start_at, end_at: initial.end_at, all_day: initial.all_day ?? 0, ...base }} />;
+    return <EventEditor key={`e-${areaId}`} top={top} onClose={onClose} initial={{ kind: 'own', start_at: initial.start_at, end_at: initial.end_at, all_day: initial.all_day ?? 0, task_id: initial.task_id ?? null, priority: initial.priority ?? 0, ...base }} />;
   if (kind === 'goal')
     return <GoalEditor key={`g-${areaId}`} top={top} onClose={onClose} initial={{ start_date: initial.start_date ?? initial.due_date ?? undefined, end_date: initial.end_date ?? initial.due_date ?? undefined, ...base }} />;
   return <TaskEditor key={`t-${areaId}`} top={top} onClose={onClose} initial={{ due_date: initial.due_date, scheduled_start: initial.scheduled_start, parent_id: initial.parent_id, ...base }} />;

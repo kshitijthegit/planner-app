@@ -39,9 +39,17 @@ export interface SeriesRow {
 }
 
 /** Occurrences [start, end] (stored format) of a series that overlap [fromMs, toMs). Wall-clock time is kept in tz across DST. */
-export function occurrences(ev: SeriesRow, fromMs: number, toMs: number, tz: string, max = 1000): { start_at: string; end_at: string }[] {
-  if (!ev.recurrence) return [{ start_at: ev.start_at, end_at: ev.end_at }];
-  const out: { start_at: string; end_at: string }[] = [];
+export interface Occurrence {
+  start_at: string;
+  end_at: string;
+  /** Local date of this occurrence's original start: identifies it for per-occurrence changes. */
+  occ_date: string;
+}
+
+export function occurrences(ev: SeriesRow, fromMs: number, toMs: number, tz: string, max = 1000): Occurrence[] {
+  if (!ev.recurrence)
+    return [{ start_at: ev.start_at, end_at: ev.end_at, occ_date: ev.all_day ? ev.start_at.slice(0, 10) : localParts(new Date(ev.start_at), tz).date }];
+  const out: Occurrence[] = [];
   if (ev.all_day) {
     const spanDays = Math.max(1, Math.round((Date.parse(`${ev.end_at.slice(0, 10)}T00:00:00Z`) - Date.parse(`${ev.start_at.slice(0, 10)}T00:00:00Z`)) / 86400000));
     let d = ev.start_at.slice(0, 10);
@@ -50,7 +58,7 @@ export function occurrences(ev: SeriesRow, fromMs: number, toMs: number, tz: str
       const startMs = Date.parse(`${d}T00:00:00Z`);
       if (startMs - 86400000 > toMs) break;
       const end = addDaysIso(d, spanDays);
-      if (Date.parse(`${end}T00:00:00Z`) + 86400000 > fromMs) out.push({ start_at: d, end_at: end });
+      if (Date.parse(`${end}T00:00:00Z`) + 86400000 > fromMs) out.push({ start_at: d, end_at: end, occ_date: d });
       d = nextDue(d, ev.recurrence);
     }
     return out;
@@ -62,7 +70,7 @@ export function occurrences(ev: SeriesRow, fromMs: number, toMs: number, tz: str
     if (ev.recur_until && d > ev.recur_until) break;
     const s = zonedToUtc(d, local.time, tz).getTime();
     if (s >= toMs) break;
-    if (s + durMs > fromMs) out.push({ start_at: new Date(s).toISOString(), end_at: new Date(s + durMs).toISOString() });
+    if (s + durMs > fromMs) out.push({ start_at: new Date(s).toISOString(), end_at: new Date(s + durMs).toISOString(), occ_date: d });
     d = nextDue(d, ev.recurrence);
   }
   return out;

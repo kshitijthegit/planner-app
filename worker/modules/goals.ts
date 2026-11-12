@@ -1,10 +1,11 @@
 // Goals: things to aim for on a day or across a date range (shown at the top of each day, unfilled).
 import { all, first, HttpError, json, nowIso, patchRow, readJson, restorableId, run, str, type Env } from '../lib/core';
 import { validPriority } from './tasks';
+import { validRecurrence } from '../lib/recur';
 import type { BackendModule } from './types';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const FIELDS = ['title', 'notes', 'area_id', 'category_id', 'priority', 'start_date', 'end_date', 'done_at'];
+const FIELDS = ['title', 'notes', 'area_id', 'category_id', 'priority', 'start_date', 'end_date', 'done_at', 'recurrence', 'recur_until'];
 
 function validate(b: Record<string, unknown>, creating: boolean) {
   if (creating || b.title !== undefined) str(b.title, 'title', { max: 300 });
@@ -15,6 +16,8 @@ function validate(b: Record<string, unknown>, creating: boolean) {
   if (b.start_date && b.end_date && (b.end_date as string) < (b.start_date as string)) throw new HttpError(400, 'end date must be on or after start date');
   if (b.done_at != null && (typeof b.done_at !== 'string' || isNaN(Date.parse(b.done_at)))) throw new HttpError(400, 'done_at must be a date');
   validPriority(b.priority);
+  if (!validRecurrence(b.recurrence)) throw new HttpError(400, 'bad repeat');
+  if (b.recur_until != null && (typeof b.recur_until !== 'string' || !DATE.test(b.recur_until))) throw new HttpError(400, 'repeat-until must be YYYY-MM-DD');
 }
 
 async function getGoal(env: Env, id: string) {
@@ -38,9 +41,10 @@ export const goalsModule: BackendModule = {
       const now = nowIso();
       await run(
         env,
-        `INSERT INTO goals (id, title, notes, area_id, category_id, priority, start_date, end_date, done_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        id, b.title, b.notes ?? '', b.area_id ?? null, b.category_id ?? null, b.priority ?? 0, b.start_date, b.end_date, b.done_at ?? null, now, now,
+        `INSERT INTO goals (id, title, notes, area_id, category_id, priority, start_date, end_date, done_at, recurrence, recur_until, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, b.title, b.notes ?? '', b.area_id ?? null, b.category_id ?? null, b.priority ?? 0, b.start_date, b.end_date, b.done_at ?? null,
+        b.recurrence ?? null, b.recur_until ?? null, now, now,
       );
       return json(await getGoal(env, id), 201);
     });
@@ -52,6 +56,7 @@ export const goalsModule: BackendModule = {
       return json(await getGoal(env, params.id));
     });
     r.delete('/api/goals/:id', async ({ env, params }) => {
+      await env.DB.prepare("DELETE FROM occurrence_overrides WHERE kind = 'goal' AND series_id = ?").bind(params.id).run();
       await run(env, 'DELETE FROM goals WHERE id = ?', params.id);
       return json({ ok: true });
     });

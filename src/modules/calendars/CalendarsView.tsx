@@ -52,8 +52,9 @@ export function CalendarsView() {
   const primaryId = cals?.find((c) => c.primary)?.id;
   const isOn = (c: GCal) => selected.includes(c.id) || (c.primary && selected.includes('primary'));
   const countFor = (c: GCal) => (google?.calendarCounts?.[c.id] ?? 0) + (c.id === primaryId ? google?.calendarCounts?.primary ?? 0 : 0);
-  const totalOn = (cals ?? []).filter(isOn).length + ics.filter((s) => s.enabled).length;
-  const totalLinked = (cals?.length ?? 0) + ics.length;
+  const others = sources.filter((s) => s.kind === 'holiday' || s.kind === 'file');
+  const totalOn = (cals ?? []).filter(isOn).length + ics.filter((s) => s.enabled).length + others.filter((s) => s.enabled).length;
+  const totalLinked = (cals?.length ?? 0) + ics.length + others.length;
 
   function toggleGoogle(c: GCal, on: boolean) {
     if (!google || !cals) return;
@@ -98,10 +99,13 @@ export function CalendarsView() {
                 </li>
               ))}
             </ul>
+            <GoogleEventTypes source={google} run={run} busy={busy} />
             <SourceDefaults source={google} run={run} />
           </>
         )}
       </section>
+
+      <Holidays run={run} busy={busy} />
 
       <section className="card settings-card" aria-labelledby="i-h">
         <div className="card-head">
@@ -131,6 +135,8 @@ export function CalendarsView() {
         </ul>
         <AddIcs run={run} busy={busy} />
       </section>
+
+      <UploadedFiles run={run} busy={busy} />
 
       <section className="card settings-card danger-zone" aria-labelledby="w-h">
         <h2 id="w-h">Wipe calendar data</h2>
@@ -208,5 +214,177 @@ function AddIcs({ run, busy }: { run: (p: Promise<unknown>, ok?: string) => Prom
         <button className="btn-accent" disabled={busy || !a.url.trim() || !a.name.trim()}>Link calendar</button>
       </div>
     </form>
+  );
+}
+
+const EVENT_TYPES: [string, string, string][] = [
+  ['default', 'Events', 'Normal calendar events'],
+  ['birthday', 'Birthdays', 'Birthdays and anniversaries from Google Contacts'],
+  ['fromGmail', 'From Gmail', 'Flights, hotels and bookings Gmail adds automatically'],
+  ['outOfOffice', 'Out of office', ''],
+  ['focusTime', 'Focus time', ''],
+  ['workingLocation', 'Working location', ''],
+];
+
+/** Choose which kinds of Google events sync (e.g. only events + birthdays). */
+function GoogleEventTypes({ source, run, busy }: { source: Source; run: (p: Promise<unknown>, ok?: string) => Promise<void>; busy: boolean }) {
+  const selected = source.eventTypes ?? EVENT_TYPES.map(([v]) => v);
+  return (
+    <div className="type-picks" role="group" aria-labelledby="gtypes-h">
+      <h3 id="gtypes-h">What to sync</h3>
+      <div className="type-grid">
+        {EVENT_TYPES.map(([v, label, hint]) => (
+          <label key={v} className="toggle-row type-pick" title={hint}>
+            <input
+              type="checkbox"
+              disabled={busy}
+              checked={selected.includes(v)}
+              onChange={(e) => {
+                const next = e.target.checked ? [...selected, v] : selected.filter((x) => x !== v);
+                run(api.patch(`/api/sources/${source.id}`, { eventTypes: next }), e.target.checked ? `Syncing ${label.toLowerCase()}` : `Stopped syncing ${label.toLowerCase()}`);
+              }}
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface HolidayCal {
+  id: string;
+  name: string;
+  group: string;
+}
+
+/** Public holidays & festivals (Google's public holiday calendars; no sign-in needed). */
+function Holidays({ run, busy }: { run: (p: Promise<unknown>, ok?: string) => Promise<void>; busy: boolean }) {
+  const { sources } = useStore();
+  const [catalog, setCatalog] = useState<HolidayCal[]>([]);
+  useEffect(() => {
+    api.get<HolidayCal[]>('/api/holidays/catalog').then(setCatalog).catch(() => {});
+  }, []);
+  const groups = [...new Set(catalog.map((c) => c.group))];
+  return (
+    <section className="card settings-card" aria-labelledby="h-h">
+      <div className="card-head">
+        <h2 id="h-h">Public holidays &amp; festivals</h2>
+        <span className="muted small">Shown at the top of the day; they don’t block out the day.</span>
+      </div>
+      {groups.map((g) => (
+        <div key={g} className="holiday-group">
+          <h3>{g}</h3>
+          <ul className="cal-rows">
+            {catalog
+              .filter((c) => c.group === g)
+              .map((c) => {
+                const src = sources.find((s) => s.kind === 'holiday' && s.holidayId === c.id);
+                const on = !!src?.enabled;
+                return (
+                  <li key={c.id} className="cal-row">
+                    <span className="cal-row-main">
+                      <strong>{c.name}</strong>
+                      <span className={`small ${src?.last_error && on ? 'warn' : 'muted'}`}>
+                        {!on ? 'Off' : src?.last_error ? `Sync failed: ${src.last_error}` : `${src?.eventCount ?? 0} dates · ${since(src?.last_sync ?? null)}`}
+                      </span>
+                    </span>
+                    <Toggle
+                      checked={on}
+                      disabled={busy}
+                      label={`Show ${c.name}`}
+                      onChange={(v) =>
+                        v
+                          ? run(api.post('/api/sources/holiday', { holidayId: c.id }), `Added ${c.name}`)
+                          : run(api.patch(`/api/sources/${src!.id}`, { enabled: false }), `Hid ${c.name}`)
+                      }
+                    />
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** Upload a .ics file (e.g. a timetable export). Its events stay read-only and can be switched off or removed. */
+function UploadedFiles({ run, busy }: { run: (p: Promise<unknown>, ok?: string) => Promise<void>; busy: boolean }) {
+  const { sources, toast } = useStore();
+  const files = sources.filter((s) => s.kind === 'file');
+  const [form, setForm] = useState({ name: '', category_id: null as string | null, reminder_min: null as number | null });
+  const [file, setFile] = useState<File | null>(null);
+
+  async function upload() {
+    if (!file) return;
+    if (file.size > 5_000_000) {
+      toast('That file is over 5 MB');
+      return;
+    }
+    const content = await file.text();
+    await run(
+      api.post('/api/sources/upload', { ...form, name: form.name.trim() || file.name.replace(/\.ics$/i, ''), fileName: file.name, content }),
+      `Imported ${file.name}`,
+    );
+    setFile(null);
+    setForm((f) => ({ ...f, name: '' }));
+  }
+
+  return (
+    <section className="card settings-card" aria-labelledby="u-h">
+      <div className="card-head">
+        <h2 id="u-h">Uploaded calendar files</h2>
+        <span className="muted small">.ics files exported from Outlook, Google, a timetable system, etc.</span>
+      </div>
+      <ul className="cal-rows">
+        {files.map((s) => (
+          <li key={s.id} className="cal-row-block">
+            <div className="cal-row">
+              <span className="cal-row-main">
+                <strong>{s.name}</strong>
+                <span className={`small ${s.last_error && s.enabled ? 'warn' : 'muted'}`}>
+                  {s.fileName ? `${s.fileName} · ` : ''}
+                  {!s.enabled ? 'Hidden' : s.last_error ? `Problem: ${s.last_error}` : `${s.eventCount ?? 0} events`}
+                </span>
+              </span>
+              <Toggle checked={!!s.enabled} disabled={busy} label={`Show ${s.name}`} onChange={(v) => run(api.patch(`/api/sources/${s.id}`, { enabled: v }), v ? `Showing ${s.name}` : `Hid ${s.name}`)} />
+            </div>
+            <SourceDefaults source={s} run={run} removable />
+          </li>
+        ))}
+      </ul>
+      <form
+        className="form add-ics"
+        onSubmit={(e) => {
+          e.preventDefault();
+          upload();
+        }}
+      >
+        <div className="field full">
+          <span>Calendar file</span>
+          <label className="file-pick">
+            <input type="file" accept=".ics,text/calendar" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <Icon name="calendar" size={16} />
+            <span>{file ? file.name : 'Choose an .ics file'}</span>
+          </label>
+        </div>
+        <label className="field">
+          <span>Name</span>
+          <input value={form.name} placeholder={file?.name.replace(/\.ics$/i, '') ?? 'e.g. Semester timetable'} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </label>
+        <label className="field">
+          <span>Default sub-category</span>
+          <CategorySelect value={form.category_id} onChange={(v) => setForm({ ...form, category_id: v })} />
+        </label>
+        <label className="field">
+          <span>Reminder</span>
+          <ReminderSelect value={form.reminder_min} onChange={(v) => setForm({ ...form, reminder_min: v })} />
+        </label>
+        <div className="field full">
+          <button className="btn-accent" disabled={busy || !file}>Upload</button>
+        </div>
+      </form>
+    </section>
   );
 }
