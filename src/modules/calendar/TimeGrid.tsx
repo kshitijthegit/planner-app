@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { addDays, addMinutes, fmtTime, minutesOfDay, sameDay, startOfDay } from '../../lib/date';
-import { attClass, isWholeDay, itemsOnDay, layoutLanes, occPrev, onDark, stagger, textOn, topRowOrder, type Item } from '../../lib/items';
+import { attClass, isWholeDay, itemColor, itemsOnDay, layoutLanes, occPrev, onDark, stagger, textOn, topRowOrder, type Item } from '../../lib/items';
 import { useStore } from '../../store';
 
 const DAY_MIN = 24 * 60;
@@ -33,12 +33,12 @@ const pct = (min: number) => `${(min / DAY_MIN) * 100}%`;
 /** Pill used in the top-of-day row: event = filled, goal = outline, task = thin with a check. */
 export function TopPill({ item, indent = 0, step = STAGGER_PX }: { item: Item; indent?: number; step?: number }) {
   const { openEditor, areaColor, areaIdOf, completeTask, reopenTask, saveGoal, setOccurrence } = useStore();
-  const color = areaColor(item.areaId ?? areaIdOf({ category_id: item.categoryId }));
+  const color = itemColor(item, areaColor(item.areaId ?? areaIdOf({ category_id: item.categoryId })));
   const open = () =>
     item.task ? openEditor({ type: 'task', task: item.task }) : item.goal ? openEditor({ type: 'goal', goal: item.goal }) : item.event && openEditor({ type: 'event', event: item.event });
   if (item.kind === 'task')
     return (
-      <span className={`pill-task${item.done ? ' done' : ''}${indent ? ' sub' : ''}`} style={{ borderColor: onDark(color), ['--c' as string]: color, marginLeft: indent * step }}>
+      <span className={`pill-task${item.done ? ' done' : ''}${indent ? ' sub' : ''}`} style={{ borderColor: color, ['--c' as string]: color, marginLeft: indent * step }}>
         <button className="mini-check" role="checkbox" aria-checked={item.done} aria-label={`Complete ${item.title}`} onClick={() => (item.done ? reopenTask(item.task!.id) : completeTask(item.task!.id))}>
           {item.done && <Icon name="check" size={10} stroke={3} />}
         </button>
@@ -47,7 +47,7 @@ export function TopPill({ item, indent = 0, step = STAGGER_PX }: { item: Item; i
     );
   if (item.kind === 'goal')
     return (
-      <span className={`pill-goal${item.done ? ' done' : ''}`} style={{ borderColor: onDark(color), ['--c' as string]: color }}>
+      <span className={`pill-goal${item.done ? ' done' : ''}`} style={{ borderColor: color, ['--c' as string]: color }}>
         <button
           className="mini-check round"
           role="checkbox"
@@ -160,7 +160,7 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
                 const e = item.end > dayEnd ? dayEnd : item.end;
                 const startMin = minutesOfDay(s);
                 const durMin = Math.max((e.getTime() - s.getTime()) / 60000, 15);
-                const color = areaColor(item.areaId ?? areaIdOf({ category_id: item.categoryId }));
+                const color = itemColor(item, areaColor(item.areaId ?? areaIdOf({ category_id: item.categoryId })));
                 const left = `calc(${(lane / lanes) * 100}% + 2px)`;
                 const laneW = `${100 / lanes}%`;
                 if (item.kind === 'task') {
@@ -171,7 +171,7 @@ export function TimeGrid({ days, items, now, onCreate, onCreateGoal, onDropTask,
                       key={item.key}
                       className={`tg-task${item.done ? ' done' : ''}${shift ? ' sub' : ''}`}
                       title={item.title}
-                      style={{ top: pct(startMin), height: `max(${pct(durMin)}, 18px)`, left: `calc(${(lane / lanes) * 100}% + ${2 + shift}px)`, width: `calc(${laneW} * ${days.length === 1 ? 0.8 : 0.62} - ${2 + shift}px)`, borderColor: onDark(color), ['--c' as string]: color }}
+                      style={{ top: pct(startMin), height: `max(${pct(durMin)}, 18px)`, left: `calc(${(lane / lanes) * 100}% + ${2 + shift}px)`, width: `calc(${laneW} * ${days.length === 1 ? 0.8 : 0.62} - ${2 + shift}px)`, borderColor: color, ['--c' as string]: color }}
                       draggable
                       onDragStart={(ev) => {
                         ev.dataTransfer.setData('text/plain', `task:${t.id}`);
@@ -229,11 +229,11 @@ export function MonthGrid({ anchor, items, now, onPickDay }: { anchor: Date; ite
           >
             <span className="month-num">{d.getDate()}</span>
             {its.slice(0, 3).map((i) => {
-              const c = areaColor(i.areaId ?? areaIdOf({ category_id: i.categoryId }));
+              const c = itemColor(i, areaColor(i.areaId ?? areaIdOf({ category_id: i.categoryId })));
               const isEvent = i.kind === 'own' || i.kind === 'ext';
               return (
                 <span key={i.key} className={`month-item ${isEvent ? 'event' : i.kind}${i.done ? ' done' : ''}${attClass(i)}`}>
-                  <span className="month-mark" style={isEvent ? { background: c, borderColor: onDark(c) } : { borderColor: onDark(c) }} aria-hidden="true" />
+                  <span className="month-mark" style={isEvent ? { background: c, borderColor: onDark(c) } : { borderColor: c }} aria-hidden="true" />
                   {i.title}
                 </span>
               );

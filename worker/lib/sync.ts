@@ -52,12 +52,12 @@ export async function syncSource(env: Env, src: SourceRow): Promise<{ count: num
     const rows = events.filter((e) => !seen.has(e.ext_id) && seen.add(e.ext_id));
     for (let i = 0; i < rows.length; i += 10) {
       const chunk = rows.slice(i, i + 10);
-      const sql = `INSERT INTO ext_events (source_id, ext_id, series_id, title, start_at, end_at, all_day, location) VALUES ${chunk
-        .map(() => '(?, ?, ?, ?, ?, ?, ?, ?)')
+      const sql = `INSERT INTO ext_events (source_id, ext_id, series_id, title, start_at, end_at, all_day, location, event_type) VALUES ${chunk
+        .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .join(', ')}`;
       stmts.push(
         env.DB.prepare(sql).bind(
-          ...chunk.flatMap((e) => [src.id, e.ext_id, e.series_id, e.title, e.start_at, e.end_at, e.all_day, e.location]),
+          ...chunk.flatMap((e) => [src.id, e.ext_id, e.series_id, e.title, e.start_at, e.end_at, e.all_day, e.location, e.event_type ?? null]),
         ),
       );
     }

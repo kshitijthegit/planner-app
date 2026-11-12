@@ -4,7 +4,7 @@
 - Subtasks: max 2 levels, enforced in `worker/modules/tasks.ts`; each subtask has its own deadline.
 - Linked calendars live at `/calendars` (per-calendar sync switches). Google sync uses `config.calendarIds`, where `[]` means everything is off.
 - Project rule: don't edit the codebase unless KJ explicitly asks.
-- Areas: Personal (espresso), University (mocha), Work (latte). Calendar colours and filters are by area (`area_id`, falling back to the category's area).
+- Areas: Personal (espresso), University (mocha), Work (latte). Filters are by area (`area_id`, falling back to the category's area). Calendar colours (`itemColor` / `PALETTE` in `src/lib/items.ts`): goals brass, tasks terracotta (any area), done tasks sage, birthdays/anniversaries dusty rose (Google `event_type` birthday or title match), synced events slate blue; only own events use their area colour.
 - Items: events are filled blocks, tasks are thin blocks with a check, and goals are unfilled blocks at the top of the day. Untimed items go to the top of the day, and an all-day event makes the whole day white.
 - New items go through `AddFlow` (area first, then details). Dropdowns use `CreatableSelect`, so each can add a new option.
 - Calendar grid shows 24 hours with no scrolling; positions are percentages of the column height.

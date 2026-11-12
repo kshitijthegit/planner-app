@@ -165,6 +165,29 @@ export function layoutLanes(items: Item[]): Placed[] {
   return out;
 }
 
+/** Fixed calendar colours (Phthalo & Coffee extras). Only your own events keep their area colour. */
+export const PALETTE = {
+  goal: '#B8893B', // brass
+  task: '#C0643F', // terracotta (any area)
+  taskDone: '#8FA98F', // sage
+  birthday: '#C99A8E', // dusty rose (birthdays, anniversaries)
+  synced: '#5B7A8C', // slate blue
+} as const;
+
+/** Birthdays and anniversaries: Google's birthday events, or any event whose title says so. */
+export function isBirthday(e?: CalEvent): boolean {
+  return !!e && (e.event_type === 'birthday' || /\b(birthday|anniversary|b'?day)\b/i.test(e.title));
+}
+
+/** Colour of a calendar item. `areaCol` is the item's area colour, used only for your own events. */
+export function itemColor(it: Item, areaCol: string): string {
+  if (it.kind === 'goal') return PALETTE.goal;
+  if (it.kind === 'task') return it.done ? PALETTE.taskDone : PALETTE.task;
+  if (isBirthday(it.event)) return PALETTE.birthday;
+  if (it.kind === 'ext') return PALETTE.synced;
+  return areaCol;
+}
+
 /** Readable text colour on a filled background. */
 export function textOn(hex: string): string {
   const n = parseInt(hex.replace('#', '').slice(0, 6), 16);

@@ -32,6 +32,8 @@ export interface CalEvent {
   series_id?: string;
   source_name?: string;
   source_kind?: 'google' | 'ics' | 'holiday' | 'file';
+  /** Synced Google events: Google's event type (default, birthday, …). */
+  event_type?: string | null;
   title: string;
   notes?: string;
   start_at: string; // ISO, or YYYY-MM-DD when all_day

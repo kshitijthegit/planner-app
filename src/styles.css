@@ -21,6 +21,12 @@
   --margin-red: #d98a7a;
   --warn: #e8956a;
   --danger: #e88a7a;
+  /* Calendar item colours (mirrored in src/lib/items.ts PALETTE) */
+  --brass: #b8893b;       /* goals */
+  --terracotta: #c0643f;  /* tasks */
+  --sage: #8fa98f;        /* completed tasks */
+  --dusty-rose: #c99a8e;  /* birthdays, anniversaries */
+  --slate: #5b7a8c;       /* synced events */
   --serif: 'Playfair Display', Georgia, serif;
   --radius: 12px;
   --hour: 48px;
@@ -531,7 +537,7 @@ select { appearance: auto; }
 }
 .mini-check::after { content: ''; position: absolute; inset: -8px; }
 .mini-check.round { border-radius: 50%; }
-.mini-check[aria-checked='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.mini-check[aria-checked='true'] { background: var(--c, var(--accent)); border-color: var(--c, var(--accent)); color: var(--on-accent); }
 .pill-event, .pill-goal, .pill-task {
   display: flex; align-items: center; gap: 5px; min-height: 20px; padding: 1px 6px; border-radius: 5px; font-size: 11px;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; flex: none;

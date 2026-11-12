@@ -102,6 +102,8 @@ const MIGRATIONS: string[][] = [
     `CREATE TABLE source_files (source_id TEXT PRIMARY KEY, content TEXT NOT NULL)`,
     `UPDATE sources SET config = json_set(config, '$.eventTypes', json('["default","birthday"]')) WHERE kind = 'google'`,
   ],
+  // v6 — keep Google's event type (e.g. birthday) on synced events so the calendar can colour them.
+  [`ALTER TABLE ext_events ADD COLUMN event_type TEXT`],
 ];
 
 let migratedInIsolate = false;

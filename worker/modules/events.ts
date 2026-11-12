@@ -69,7 +69,7 @@ export const eventsModule: BackendModule = {
       const own = await ownEventsBetween(env, Date.parse(from), Date.parse(to), (await getSettings(env)).timezone);
       const ext = await all(
         env,
-        `SELECT e.source_id, e.ext_id, e.series_id, e.title, e.start_at, e.end_at, e.all_day, e.location,
+        `SELECT e.source_id, e.ext_id, e.series_id, e.title, e.start_at, e.end_at, e.all_day, e.location, e.event_type,
                 COALESCE(o.category_id, s.category_id) AS category_id, NULL AS area_id, 0 AS priority,
                 COALESCE(a.attendance, 'yes') AS attendance, s.name AS source_name, s.kind AS source_kind, 'ext' AS kind
          FROM ext_events e JOIN sources s ON s.id = e.source_id AND s.enabled = 1

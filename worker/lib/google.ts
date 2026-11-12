@@ -101,6 +101,7 @@ export interface ExtEvent {
   end_at: string;
   all_day: number;
   location: string;
+  event_type?: string; // Google eventType (default, birthday, …); absent for ICS
 }
 
 interface GEvent {
@@ -146,6 +147,7 @@ export async function fetchGoogleEvents(env: Env, calendarId: string, from: Date
         end_at: allDay ? e.end.date! : new Date(e.end.dateTime!).toISOString(),
         all_day: allDay ? 1 : 0,
         location: e.location ?? '',
+        event_type: e.eventType ?? 'default',
       });
     }
     pageToken = data.nextPageToken;
