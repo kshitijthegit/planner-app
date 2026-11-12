@@ -1,6 +1,7 @@
 // Backend module registry. Add new feature modules here.
 import { areasModule } from './areas';
 import { authModule } from './auth';
+import { captureModule } from './capture';
 import { eventsModule } from './events';
 import { goalsModule } from './goals';
 import { occurrencesModule } from './occurrences';
@@ -22,4 +23,5 @@ export const modules: BackendModule[] = [
   sourcesModule,
   pushModule,
   notifyModule,
+  captureModule,
 ];

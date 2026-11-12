@@ -1,0 +1,23 @@
+{
+  "timeZone": "Asia/Singapore",
+  "runtimeVersion": "V8",
+  "exceptionLogging": "STACKDRIVER",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "urlFetchWhitelist": ["https://planner-app.plannerkj.workers.dev/"],
+  "addOns": {
+    "common": {
+      "name": "Planner",
+      "logoUrl": "https://planner-app.plannerkj.workers.dev/icons/icon-192.png",
+      "layoutProperties": { "primaryColor": "#133B2D", "secondaryColor": "#C89F72" },
+      "homepageTrigger": { "runFunction": "onHomepage" },
+      "universalActions": [{ "label": "Planner settings", "runFunction": "onSettings" }]
+    },
+    "gmail": {
+      "contextualTriggers": [{ "unconditional": {}, "onTriggerFunction": "onGmailMessage" }]
+    }
+  }
+}

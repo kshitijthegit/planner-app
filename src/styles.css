@@ -675,3 +675,9 @@ body, .rail, .bottom-nav, .card, .modal, .tray-sheet { transition: background-co
 .file-pick:hover { border-color: var(--accent); }
 .file-pick svg { color: var(--accent); }
 .file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ---------- Gmail add-on key ---------- */
+.key-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.key-box code { flex: 1 1 260px; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; word-break: break-all; user-select: all; }
+.key-box p { flex-basis: 100%; margin: 0; }
+.gmail-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; text-decoration: none; }

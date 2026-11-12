@@ -37,6 +37,7 @@ An installable PWA (Android + Windows) on Cloudflare Workers with D1 storage.
 - Goals can repeat. For repeating events and goals, any single occurrence can be edited, cancelled or (goals) marked achieved without changing the rest, via the `occurrence_overrides` table and `/api/occurrences`.
 - Google sync can be limited to certain event types (`config.eventTypes`: default, birthday, fromGmail, outOfOffice, focusTime, workingLocation).
 - Public holidays and festivals come from Google's public holiday ICS feeds (`worker/lib/holidays.ts`). They show as markers and never block out the day.
+- Gmail add-on (`gmail-addon/`, an Apps Script add-on): "Add to Planner" beside an open email (Gmail web + Android). It sends to `/api/capture` with a personal access key (Settings → Gmail add-on; stored hashed in kv) that can only list areas and add events and tasks. Setup: `gmail-addon/README.md`.
 - Calendar files (.ics) can be uploaded. They're stored in `source_files` and kept read-only, with on/off and remove like other calendars.
 - Migration v2 wiped all calendar data once (Nov 2026). Linked calendars stayed listed, with sync switched off.
 

@@ -17,6 +17,7 @@ export function SettingsView() {
         <h1>Settings</h1>
       </header>
       <Notifications />
+      <GmailAddon />
       <section className="card settings-card">
         <h2>Linked calendars</h2>
         <p className="muted small">Google and Outlook (ICS) calendars, each with its own sync switch.</p>
@@ -131,3 +132,47 @@ function Notifications() {
   );
 }
 
+
+/** Access key for the Gmail add-on ("Add to Planner" beside an open email). */
+function GmailAddon() {
+  const { toast } = useStore();
+  const [info, setInfo] = useState<{ exists: boolean; created_at: string | null } | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const refresh = () => api.get<{ exists: boolean; created_at: string | null }>('/api/capture/key').then(setInfo).catch(() => setInfo(null));
+  useEffect(() => { refresh(); }, []);
+  async function generate() {
+    if (info?.exists && !confirm('Make a new key? The add-on will stop working until you paste the new one into it.')) return;
+    const r = await api.post<{ key: string }>('/api/capture/key');
+    setFresh(r.key);
+    refresh();
+  }
+  return (
+    <section className="card settings-card">
+      <h2>Gmail add-on</h2>
+      <p className="muted small">
+        Adds an “Add to Planner” panel beside emails in Gmail (web and Android). It uses an access key that can only add events and tasks.{' '}
+        <a href="https://github.com/kshitijthegit/planner-app/blob/main/gmail-addon/README.md" target="_blank" rel="noreferrer">Setup guide</a>
+      </p>
+      <p className="muted small">
+        {info?.exists ? `Key active since ${new Date(info.created_at!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.` : 'No key yet.'}
+      </p>
+      {fresh && (
+        <div className="key-box">
+          <code>{fresh}</code>
+          <button className="btn-ghost" onClick={async () => { await navigator.clipboard.writeText(fresh); toast('Key copied'); }}>
+            <Icon name="copy" size={14} /> Copy
+          </button>
+          <p className="muted small">Shown once. Paste it into the add-on’s settings in Gmail.</p>
+        </div>
+      )}
+      <div className="btn-row">
+        <button className="btn-accent" onClick={generate}>{info?.exists ? 'Make new key' : 'Make access key'}</button>
+        {info?.exists && (
+          <button className="btn-ghost" onClick={async () => { if (!confirm('Turn off the key? The add-on will stop working.')) return; await api.del('/api/capture/key'); setFresh(null); refresh(); toast('Key turned off'); }}>
+            Turn off key
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}

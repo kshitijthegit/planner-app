@@ -14,6 +14,7 @@
 - Calendar tasks: day and week views show all tasks, with subtasks labelled "Sub-subtask → Subtask → Main" and staggered under any parent on the same day (`stagger()`). Month view lists no tasks, only "N tasks due" per day.
 - Repeating events and goals: changes to a single occurrence go in `occurrence_overrides` (cancel, done_at, or a data patch). Editors show an "Only this one / Every occurrence" switch.
 - Calendar sources come in four kinds: google (with calendarIds + eventTypes), ics, holiday (Google public ICS feeds, which never whiten the day) and file (uploaded .ics stored in `source_files`).
+- Gmail add-on lives in `gmail-addon/` (Apps Script; `Parse.gs` is plain JS tested by `src/lib/gmailParse.test.ts`). It talks to `worker/modules/capture.ts` using a Bearer access key, which can reach only `/api/capture` and `/api/capture/meta`. If the app's URL changes, update `urlFetchWhitelist` in its manifest.
 - Date and time entry uses `pickers.tsx` (DateField / TimeField / DateTimeField), never native date inputs.
 - GUI: Today page = home (Top 3, timeline, quick add, shutdown card). Calendar = day/week/month with a drag-to-time-block task tray.
 - Areas → Categories (2 levels) colour every task and event. Synced events get a category per source, overridable per series.

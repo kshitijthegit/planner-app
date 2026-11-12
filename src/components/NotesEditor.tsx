@@ -31,6 +31,11 @@ export function checklistProgress(notes: string): string | null {
   return items.length ? `${items.filter((i) => i.done).length}/${items.length}` : null;
 }
 
+/** Gmail links in notes (added by the Gmail add-on), shown as an "Open email" button. */
+export function gmailLinks(text: string): string[] {
+  return [...new Set(text.match(/https:\/\/mail\.google\.com\/[^\s)]+/g) ?? [])];
+}
+
 export function NotesEditor({ value, onChange, id = 'notes' }: { value: string; onChange: (v: string) => void; id?: string }) {
   const { text, items } = parseNotes(value);
   const [showList, setShowList] = useState(items.length > 0);
@@ -53,6 +58,11 @@ export function NotesEditor({ value, onChange, id = 'notes' }: { value: string; 
         )}
       </div>
       <textarea id={id} rows={3} value={text} onChange={(e) => update(e.target.value, items)} />
+      {gmailLinks(text).map((url) => (
+        <a key={url} className="link-btn gmail-link" href={url} target="_blank" rel="noreferrer">
+          <Icon name="link" size={14} /> Open email in Gmail
+        </a>
+      ))}
       {showList && (
         <div className="checklist" role="group" aria-label="Checklist">
           <div className="checklist-head">
